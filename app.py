@@ -142,10 +142,7 @@ def render_comparison_chart(all_results):
 # PAGE CONFIGURATION
 # -----------------------------------------------------------
 st.set_page_config("Provar AI - Enhanced XML Analyzer", layout="wide", page_icon="🚀")
-st.markdown(
-    '<div class="main-header">🤖 Provar AI Report Analysis and Baseline Tool</div>',
-    unsafe_allow_html=True
-)
+
 # Custom CSS for better UI
 st.markdown("""
     <style>
@@ -182,22 +179,7 @@ st.markdown('<div class="main-header">🤖 Provar AI Report Analysis and Baselin
 # -----------------------------------------------------------
 with st.sidebar:
     st.header("⚙️ Configuration")
-     # 🆕 MODE SELECTION (NEW)
-    analysis_mode = st.radio(
-        "🔀 Analysis Mode",
-        ["XML Analyzer", "AutomationAPI"],
-        index=0
-    )
-
-    st.subheader("🤖 AI Features")
-    use_ai = st.checkbox("Enable AI Analysis", value=False)
-
-    with st.expander("🎯 Advanced AI Features"):
-        enable_batch_analysis = st.checkbox("Batch Pattern Analysis", True)
-        enable_jira_generation = st.checkbox("Jira Ticket Generation", True)
-        enable_test_improvements = st.checkbox("Test Improvement Suggestions", False)
-
-    admin_key = st.text_input("🔐 Admin Key", type="password")
+    
     # AI Settings
     st.subheader("🤖 AI Features")
     use_ai = st.checkbox("Enable AI Analysis", value=False, help="Use Groq AI for intelligent failure analysis")
@@ -247,36 +229,6 @@ with st.sidebar:
 # -----------------------------------------------------------
 # FILE UPLOAD SECTION
 # -----------------------------------------------------------
-if analysis_mode == "XML Analyzer":
-    st.markdown("## 📁 Upload XML Reports")
-    st.markdown("Upload multiple JUnit XML reports for simultaneous AI-powered analysis")
-
-    uploaded_files = st.file_uploader(
-        "Choose XML files",
-        type=["xml"],
-        accept_multiple_files=True,
-        help="Select one or more XML files to analyze"
-    )
-    if analysis_mode == "AutomationAPI":
-
-    st.markdown("## ⚙️ AutomationAPI XML Analysis")
-
-    uploaded_api_files = st.file_uploader(
-        "Upload AutomationAPI XML files",
-        type=["xml"],
-        accept_multiple_files=True,
-        key="automation_api_uploader"
-    )
-
-    if uploaded_api_files:
-        st.warning(
-            "AutomationAPI analysis is enabled.\n\n"
-            "Parsing, baseline comparison, and AI analysis "
-            "will be implemented in the next step."
-        )
-    else:
-        st.info("👆 Upload AutomationAPI XML files to begin analysis")
-
 st.markdown("## 📁 Upload XML Reports")
 st.markdown("Upload multiple JUnit XML reports for simultaneous AI-powered analysis")
 
