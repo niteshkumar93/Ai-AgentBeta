@@ -39,7 +39,7 @@ def is_skipped_failure(error_message: str) -> bool:
 def extract_spec_name(classname: str) -> str:
     """
     Extract spec file name from classname
-    Example: 'FS_MAP_SF_RL_LX_Text_Ads_Opp_OBJ_Console' -> 'FS_MAP_SF_RL_LX_Text_Ads_Opp_OBJ_Console'
+    Example: 'LightningFormattedNumFieldDHSpec' -> 'LightningFormattedNumFieldDHSpec'
     """
     return classname if classname else "Unknown_Spec"
 
