@@ -91,7 +91,8 @@ def extract_automation_api_failures(xml_file) -> List[Dict]:
     xml_file.seek(0)
     tree = ET.parse(xml_file)
     root = tree.getroot()
-    
+    full_xml_text = ET.tostring(root, encoding="unicode")
+
     # Extract project name
     project_name = extract_project_name(xml_file)
     xml_file.seek(0)  # Reset for re-parsing
