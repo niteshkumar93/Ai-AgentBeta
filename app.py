@@ -223,7 +223,7 @@ with st.sidebar:
     st.subheader("📊 Report Type")
     report_type = st.radio(
         "Select Report Type:",
-        options=["Provar XML Reports", "AutomationAPI Reports"],
+        options=["Provar Application Reports", "AutomationAPI Reports"],
         index=0,
         help="Choose the type of XML report you want to analyze"
     )
@@ -283,11 +283,11 @@ if report_type == "Provar XML Reports":
     # ============================================================
     # PROVAR XML REPORT ANALYSIS (EXISTING FUNCTIONALITY - COMPLETE)
     # ============================================================
-    st.markdown("## 📁 Upload Provar XML Reports")
+    st.markdown("## 📁 Upload Provar Application Reports")
     st.markdown("Upload multiple JUnit XML reports from Provar test executions for simultaneous AI-powered analysis")
     
     uploaded_files = st.file_uploader(
-        "Choose Provar XML files",
+        "Choose XML files for Application Report Analysis",
         type=["xml"],
         accept_multiple_files=True,
         key="provar_uploader",
@@ -591,8 +591,8 @@ else:
     # ============================================================
     # AUTOMATION API REPORT ANALYSIS (NEW FUNCTIONALITY)
     # ============================================================
-    st.markdown("## 🔧 Upload AutomationAPI XML Reports")
-    st.markdown("Upload XML reports from AutomationAPI test executions (e.g., Jasmine/Selenium tests)")
+    st.markdown("## 🔧 Upload AutomationAPI Testbuilder Reports")
+    st.markdown("Upload XML reports from AutomationAPI test executions (e.g., .xml)")
     
     uploaded_api_files = st.file_uploader(
         "Choose AutomationAPI XML files",
