@@ -28,7 +28,7 @@ def extract_actual_spec_name(testcase_node, suite_name: str) -> str:
         value = prop.attrib.get("value", "")
         if value.endswith("Spec"):
             return value
-    
+     
     # 4️⃣ Absolute fallback
     return classname or suite_name or "Unknown_Spec"
 
