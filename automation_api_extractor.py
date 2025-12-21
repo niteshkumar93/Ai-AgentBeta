@@ -1,34 +1,36 @@
 import xml.etree.ElementTree as ET
 from typing import List, Dict
 import re
-def extract_actual_spec_name(testcase_node) -> str:
+def extract_actual_spec_name(testcase_node, suite_name: str) -> str:
     """
-    Extract real Provar Spec file name PER TESTCASE.
-    This fixes multi-spec collapsing.
+    Extract the real Provar Spec file name from testcase classname or suite name.
+    Examples:
+    - FS_MAP_SF_lightning-Date-input-field.RA -> LightningFormattedNumFieldDHSpec
+    - classname attribute often contains the actual spec name
     """
-
-    # 1️⃣ classname itself is the spec (best & most reliable)
+    
+    # 1️⃣ Best case: classname itself is the spec
     classname = testcase_node.attrib.get("classname", "")
-    if classname.endswith("Spec"):
+    
+    # If classname is different from suite name and looks like a spec, use it
+    if classname and classname != suite_name:
+        if classname.endswith("Spec"):
+            return classname
+        # Otherwise use classname as the spec identifier
         return classname
-
-    # 2️⃣ Look inside failure text of THIS testcase only
-    failure = testcase_node.find("failure")
-    if failure is not None:
-        failure_text = (failure.text or "") + " " + (failure.attrib.get("message", ""))
-        match = re.search(r'([A-Za-z0-9_]+Spec)', failure_text)
-        if match:
-            return match.group(1)
-
-    # 3️⃣ Look inside testcase name
-    test_name = testcase_node.attrib.get("name", "")
-    match = re.search(r'([A-Za-z0-9_]+Spec)', test_name)
-    if match:
-        return match.group(1)
-
-    # 4️⃣ Fallback (flow name)
-    return classname or "Unknown_Spec"
-
+    
+    # 2️⃣ Use suite name if classname matches suite name
+    if suite_name and suite_name != "Unknown":
+        return suite_name
+    
+    # 3️⃣ Look for <property name="spec" value="...Spec">
+    for prop in testcase_node.findall(".//property"):
+        value = prop.attrib.get("value", "")
+        if value.endswith("Spec"):
+            return value
+    
+    # 4️⃣ Absolute fallback
+    return classname or suite_name or "Unknown_Spec"
 
 def extract_project_name(xml_file) -> str:
     """
