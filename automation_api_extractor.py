@@ -1,6 +1,30 @@
 import xml.etree.ElementTree as ET
 from typing import List, Dict
 import re
+def extract_actual_spec_name(testcase_node, full_xml_text: str) -> str:
+    """
+    Extract the real Provar Spec file name like:
+    Opp_Text_Ads_RL_ConsoleSpec
+    """
+
+    # 1️⃣ Best case: classname itself is the spec
+    classname = testcase_node.attrib.get("classname", "")
+    if classname.endswith("Spec"):
+        return classname
+
+    # 2️⃣ Look for <property name="spec" value="...Spec">
+    for prop in testcase_node.findall(".//property"):
+        value = prop.attrib.get("value", "")
+        if value.endswith("Spec"):
+            return value
+
+    # 3️⃣ Regex fallback on full XML
+    match = re.search(r'([A-Za-z0-9_]+Spec)', full_xml_text)
+    if match:
+        return match.group(1)
+
+    # 4️⃣ Absolute fallback (old behavior)
+    return classname or "Unknown_Spec"
 
 
 def extract_project_name(xml_file) -> str:
@@ -11,7 +35,8 @@ def extract_project_name(xml_file) -> str:
     xml_file.seek(0)
     tree = ET.parse(xml_file)
     root = tree.getroot()
-    
+    full_xml_text = ET.tostring(root, encoding="unicode")
+
     # Try to find workspace path in failure messages
     for testcase in root.findall(".//testcase"):
         failure = testcase.find("failure")
@@ -34,15 +59,6 @@ def is_skipped_failure(error_message: str) -> bool:
         "previous step has failed with error"
     ]
     return any(indicator in error_message for indicator in skip_indicators)
-
-
-def extract_spec_name(classname: str) -> str:
-    """
-    Extract spec file name from classname
-    Example: 'LightningFormattedNumFieldDHSpec' -> 'LightningFormattedNumFieldDHSpec'
-    """
-    return classname if classname else "Unknown_Spec"
-
 
 def clean_error_message(raw_message: str) -> tuple:
     """
@@ -106,8 +122,8 @@ def extract_automation_api_failures(xml_file) -> List[Dict]:
             failure = testcase.find("failure")
             
             if failure is not None:
+                spec_name = extract_actual_spec_name(testcase, full_xml_text)
                 classname = testcase.attrib.get("classname", "Unknown")
-                spec_name = extract_spec_name(classname)
                 test_name = testcase.attrib.get("name", "Unknown Test")
                 test_time = testcase.attrib.get("time", "0")
                 
