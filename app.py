@@ -223,7 +223,7 @@ with st.sidebar:
     st.subheader("📊 Report Type")
     report_type = st.radio(
         "Select Report Type:",
-        options=["Provar XML Reports", "AutomationAPI Reports"],
+        options=["Provar Regression Reports", "AutomationAPI Reports"],
         index=0,
         help="Choose the type of XML report you want to analyze"
     )
