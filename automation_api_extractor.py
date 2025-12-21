@@ -1,36 +1,7 @@
 import xml.etree.ElementTree as ET
 from typing import List, Dict
 import re
-def extract_actual_spec_name(testcase_node, suite_name: str) -> str:
-    """
-    Extract the real Provar Spec file name from testcase classname or suite name.
-    Examples:
-    - FS_MAP_SF_lightning-Date-input-field.RA -> LightningFormattedNumFieldDHSpec
-    - classname attribute often contains the actual spec name
-    """
-    
-    # 1️⃣ Best case: classname itself is the spec
-    classname = testcase_node.attrib.get("classname", "")
-    
-    # If classname is different from suite name and looks like a spec, use it
-    if classname and classname != suite_name:
-        if classname.endswith("Spec"):
-            return classname
-        # Otherwise use classname as the spec identifier
-        return classname
-    
-    # 2️⃣ Use suite name if classname matches suite name
-    if suite_name and suite_name != "Unknown":
-        return suite_name
-    
-    # 3️⃣ Look for <property name="spec" value="...Spec">
-    for prop in testcase_node.findall(".//property"):
-        value = prop.attrib.get("value", "")
-        if value.endswith("Spec"):
-            return value
-     
-    # 4️⃣ Absolute fallback
-    return classname or suite_name or "Unknown_Spec"
+
 
 def extract_project_name(xml_file) -> str:
     """
@@ -40,6 +11,7 @@ def extract_project_name(xml_file) -> str:
     xml_file.seek(0)
     tree = ET.parse(xml_file)
     root = tree.getroot()
+
     # Try to find workspace path in failure messages
     for testcase in root.findall(".//testcase"):
         failure = testcase.find("failure")
@@ -62,6 +34,7 @@ def is_skipped_failure(error_message: str) -> bool:
         "previous step has failed with error"
     ]
     return any(indicator in error_message for indicator in skip_indicators)
+
 
 def clean_error_message(raw_message: str) -> tuple:
     """
@@ -94,7 +67,6 @@ def extract_automation_api_failures(xml_file) -> List[Dict]:
     xml_file.seek(0)
     tree = ET.parse(xml_file)
     root = tree.getroot()
-    full_xml_text = ET.tostring(root, encoding="unicode")
 
     # Extract project name
     project_name = extract_project_name(xml_file)
@@ -126,8 +98,15 @@ def extract_automation_api_failures(xml_file) -> List[Dict]:
             failure = testcase.find("failure")
             
             if failure is not None:
-                spec_name = extract_actual_spec_name(testcase)
-                classname = testcase.attrib.get("classname", "Unknown")
+                # Extract spec name from classname or suite name
+                classname = testcase.attrib.get("classname", "")
+                
+                # Use classname as spec if it's different from suite, otherwise use suite name
+                if classname and classname != suite_name:
+                    spec_name = classname
+                else:
+                    spec_name = suite_name
+                
                 test_name = testcase.attrib.get("name", "Unknown Test")
                 test_time = testcase.attrib.get("time", "0")
                 
