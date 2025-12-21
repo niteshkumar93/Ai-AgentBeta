@@ -279,7 +279,7 @@ with st.sidebar:
 # MAIN CONTENT AREA
 # -----------------------------------------------------------
 
-if report_type == "Provar XML Reports":
+if report_type == "Provar Regression Reports":
     # ============================================================
     # PROVAR XML REPORT ANALYSIS (EXISTING FUNCTIONALITY - COMPLETE)
     # ============================================================
