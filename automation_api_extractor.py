@@ -1,6 +1,39 @@
 import xml.etree.ElementTree as ET
 from typing import List, Dict
 import re
+def extract_spec_from_testsuite(testsuite_node) -> str:
+    """
+    Resolve the real Provar Spec file by scanning ALL failures
+    inside a testsuite. Handles cases where Spec appears only
+    in later failures.
+    """
+
+    spec_pattern = re.compile(r'([A-Za-z0-9_]+Spec)')
+
+    # 1️⃣ Scan all failure text + messages
+    for testcase in testsuite_node.findall("testcase"):
+        failure = testcase.find("failure")
+        if failure is None:
+            continue
+
+        combined_text = (
+            (failure.attrib.get("message", "") or "") + " " +
+            (failure.text or "")
+        )
+
+        match = spec_pattern.search(combined_text)
+        if match:
+            return match.group(1)
+
+    # 2️⃣ Fallback: classname ending with Spec
+    for testcase in testsuite_node.findall("testcase"):
+        classname = testcase.attrib.get("classname", "")
+        if classname.endswith("Spec"):
+            return classname
+
+    # 3️⃣ Absolute fallback (flow name)
+    return testsuite_node.attrib.get("name", "Unknown_Spec")
+
 def extract_actual_spec_name(testcase_node) -> str:
     """
     Extract real Provar Spec file name PER TESTCASE.
@@ -92,8 +125,6 @@ def extract_automation_api_failures(xml_file) -> List[Dict]:
     xml_file.seek(0)
     tree = ET.parse(xml_file)
     root = tree.getroot()
-    full_xml_text = ET.tostring(root, encoding="unicode")
-
     # Extract project name
     project_name = extract_project_name(xml_file)
     xml_file.seek(0)  # Reset for re-parsing
@@ -114,7 +145,9 @@ def extract_automation_api_failures(xml_file) -> List[Dict]:
     # Parse all testsuites
     for testsuite in root.findall(".//testsuite"):
         suite_name = testsuite.attrib.get("name", "Unknown")
-        
+        # ✅ Resolve correct spec ONCE per testsuite
+        resolved_spec_name = extract_spec_from_testsuite(testsuite)
+
         # Skip non-test suites (like "Launch Provar", "Screen Recording", etc.)
         if suite_name in ["Launch Provar", "Screen Recording", "Close Provar"]:
             continue
@@ -124,7 +157,7 @@ def extract_automation_api_failures(xml_file) -> List[Dict]:
             failure = testcase.find("failure")
             
             if failure is not None:
-                spec_name = extract_actual_spec_name(testcase)
+                spec_name = resolved_spec_name
                 classname = testcase.attrib.get("classname", "Unknown")
                 test_name = testcase.attrib.get("name", "Unknown Test")
                 test_time = testcase.attrib.get("time", "0")
