@@ -1,50 +1,26 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+from plotly.subplots import make_subplots
+import io
 import os
+from datetime import datetime
 
-# Import the extractors and utilities
-from automation_api_extractor import extract_failed_tests_automation_api
-from automation_api_baseline import (
-    save_automation_api_baseline,
-    compare_automation_api_baseline,
-    load_automation_api_baseline
-)
-from ai_reasoner import (
-    generate_ai_summary,
-    generate_batch_analysis,
-    generate_jira_ticket,
-    suggest_test_improvements
-)
-
-# -----------------------------------------------------------
-# CONSTANTS
-# -----------------------------------------------------------
-KNOWN_API_PROJECTS = [
-    "API_Gateway", "REST_Services", "SOAP_Services",
-    "Integration_Tests", "Microservices_API", "GraphQL_API",
-    "Authentication_API", "Payment_API", "User_API"
-]
-
-APP_VERSION = "2.2.0"
-
-# -----------------------------------------------------------
-# HELPER FUNCTIONS
-# -----------------------------------------------------------
 def format_execution_time(raw_time: str):
     """Format timestamp from XML to readable format"""
     if raw_time in (None, "", "Unknown"):
         return "Unknown"
 
+    # Try different datetime formats
     formats_to_try = [
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%d %H:%M:%S",
-        "%a %b %d %H:%M:%S %Z %Y",
-        "%Y-%m-%dT%H:%M:%S.%f",
-        "%Y-%m-%dT%H:%M:%SZ",
-        "%d/%m/%Y %H:%M:%S",
-        "%m/%d/%Y %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",           # ISO format: 2025-01-15T14:30:00
+        "%Y-%m-%d %H:%M:%S",           # Common format: 2025-01-15 14:30:00
+        "%a %b %d %H:%M:%S %Z %Y",     # Full format: Wed Jan 15 14:30:00 UTC 2025
+        "%Y-%m-%dT%H:%M:%S.%f",        # With milliseconds
+        "%Y-%m-%dT%H:%M:%SZ",          # With Z suffix
+        "%d/%m/%Y %H:%M:%S",           # DD/MM/YYYY format
+        "%m/%d/%Y %H:%M:%S",           # MM/DD/YYYY format
     ]
     
     for fmt in formats_to_try:
@@ -54,40 +30,75 @@ def format_execution_time(raw_time: str):
         except ValueError:
             continue
     
+    # If no format matches, return as-is
     return raw_time
 
-def safe_extract_api_failures(uploaded_file):
-    """Safely extract API test failures"""
+from xml_extractor import extract_failed_tests
+from ai_reasoner import (
+    generate_ai_summary, 
+    generate_batch_analysis,
+    generate_jira_ticket,
+    suggest_test_improvements
+)
+from baseline_manager import save_baseline, compare_with_baseline, load_baseline
+
+# -----------------------------------------------------------
+# CONSTANTS
+# -----------------------------------------------------------
+KNOWN_PROJECTS = [
+    "VF_Lightning_Windows", "Regmain-Flexi", "Date_Time",
+    "CPQ_Classic", "CPQ_Lightning", "QAM_Lightning", "QAM_Classic",
+    "Internationalization_pipeline", "Lightning_Console_LogonAs",
+    "DynamicForm", "Classic_Console_LogonAS", "LWC_Pipeline",
+    "Regmain_LS_Windows", "Regmain_LC_Windows",
+    "Regmain-VF", "FSL", "HYBRID_AUTOMATION_Pipeline",
+]
+
+APP_VERSION = "2.2.0"  # Fixed timestamp display
+
+# -----------------------------------------------------------
+# HELPERS
+# -----------------------------------------------------------
+def safe_extract_failures(uploaded_file):
     try:
         uploaded_file.seek(0)
-        return extract_failed_tests_automation_api(uploaded_file)
+        return extract_failed_tests(uploaded_file)
     except Exception as e:
         st.error(f"Error parsing {uploaded_file.name}: {str(e)}")
         return []
 
-def detect_api_project(filename: str):
-    """Detect API project from filename"""
-    for p in KNOWN_API_PROJECTS:
+def detect_project(path: str, filename: str):
+    for p in KNOWN_PROJECTS:
+        if path and (f"/{p}" in path or f"\\{p}" in path):
+            return p
         if p.lower() in filename.lower():
             return p
-    return KNOWN_API_PROJECTS[0]
+    return KNOWN_PROJECTS[0]
 
-def render_api_summary_card(xml_name, new_count, existing_count, total_count):
-    """Render summary card for API test results"""
+def shorten_project_cache_path(path):
+    if not path:
+        return ""
+    marker = "Jenkins\\"
+    if marker in path:
+        return path.split(marker, 1)[1]
+    return path.replace("/", "\\").split("\\")[-1]
+
+def render_summary_card(xml_name, new_count, existing_count, total_count):
+    """Render a summary card for each XML file"""
     status_color = "🟢" if new_count == 0 else "🔴"
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Status", status_color)
     with col2:
-        st.metric("New API Failures", new_count, delta=None if new_count == 0 else f"+{new_count}", delta_color="inverse")
+        st.metric("New Failures", new_count, delta=None if new_count == 0 else f"+{new_count}", delta_color="inverse")
     with col3:
-        st.metric("Existing API Failures", existing_count)
+        st.metric("Existing Failures", existing_count)
     with col4:
-        st.metric("Total API Failures", total_count)
+        st.metric("Total Failures", total_count)
 
-def render_api_comparison_chart(all_results):
-    """Create comparison chart for API test results"""
+def render_comparison_chart(all_results):
+    """Create a comparison chart across all uploaded XMLs"""
     if not all_results:
         return
     
@@ -104,20 +115,20 @@ def render_api_comparison_chart(all_results):
     
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        name='New API Failures',
+        name='New Failures',
         x=df['File'],
         y=df['New Failures'],
         marker_color='#FF4B4B'
     ))
     fig.add_trace(go.Bar(
-        name='Existing API Failures',
+        name='Existing Failures',
         x=df['File'],
         y=df['Existing Failures'],
         marker_color='#FFA500'
     ))
     
     fig.update_layout(
-        title='API Failure Comparison Across All Reports',
+        title='Failure Comparison Across All Reports',
         xaxis_title='XML Files',
         yaxis_title='Number of Failures',
         barmode='stack',
@@ -130,9 +141,9 @@ def render_api_comparison_chart(all_results):
 # -----------------------------------------------------------
 # PAGE CONFIGURATION
 # -----------------------------------------------------------
-st.set_page_config("AutomationAPI Analyzer", layout="wide", page_icon="🔌")
+st.set_page_config("Provar AI - Enhanced XML Analyzer", layout="wide", page_icon="🚀")
 
-# Custom CSS
+# Custom CSS for better UI
 st.markdown("""
     <style>
     .main-header {
@@ -146,7 +157,12 @@ st.markdown("""
         border-top: 2px solid #e0e0e0;
         margin: 2rem 0;
     }
-    .api-feature-box {
+    .stExpander {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        margin-bottom: 1rem;
+    }
+    .ai-feature-box {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 1rem;
         border-radius: 10px;
@@ -156,7 +172,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-header">🔌 AutomationAPI Test Analysis Tool</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🤖 Provar AI Report Analysis and Baseline Tool</div>', unsafe_allow_html=True)
 
 # -----------------------------------------------------------
 # SIDEBAR CONFIGURATION
@@ -166,15 +182,15 @@ with st.sidebar:
     
     # AI Settings
     st.subheader("🤖 AI Features")
-    use_ai = st.checkbox("Enable AI Analysis", value=False, help="Use AI for intelligent API failure analysis")
+    use_ai = st.checkbox("Enable AI Analysis", value=False, help="Use Groq AI for intelligent failure analysis")
     
     # Advanced AI Features
     with st.expander("🎯 Advanced AI Features"):
-        enable_batch_analysis = st.checkbox("Batch Pattern Analysis", value=True, help="Find common patterns across API failures")
+        enable_batch_analysis = st.checkbox("Batch Pattern Analysis", value=True, help="Find common patterns across failures")
         enable_jira_generation = st.checkbox("Jira Ticket Generation", value=True, help="Auto-generate Jira tickets")
-        enable_test_improvements = st.checkbox("API Test Improvements", value=False, help="Get suggestions to improve API test stability")
+        enable_test_improvements = st.checkbox("Test Improvement Suggestions", value=False, help="Get suggestions to improve test stability")
     
-    admin_key = st.text_input("🔑 Admin Key", type="password", help="Required for saving baselines")
+    admin_key = st.text_input("🔐 Admin Key", type="password", help="Required for saving baselines")
     
     st.markdown("---")
     
@@ -182,8 +198,9 @@ with st.sidebar:
     st.caption(f"Version: {APP_VERSION}")
     
     # Reset Button
-    if st.button("🔄 Reset All", type="secondary", use_container_width=True):
-        for key in ['api_all_results', 'api_upload_stats', 'api_batch_analysis']:
+    if st.button("🔄 Reset All", type="secondary", use_container_width=True, help="Clear all data and start fresh"):
+        # Clear session state
+        for key in ['all_results', 'upload_stats', 'batch_analysis']:
             if key in st.session_state:
                 del st.session_state[key]
         st.success("✅ UI Reset! Ready for new uploads.")
@@ -191,10 +208,10 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 📊 Upload Statistics")
-    if 'api_upload_stats' in st.session_state:
-        st.info(f"**Files Uploaded:** {st.session_state.api_upload_stats.get('count', 0)}")
-        st.info(f"**Total Failures:** {st.session_state.api_upload_stats.get('total_failures', 0)}")
-        st.info(f"**New Failures:** {st.session_state.api_upload_stats.get('new_failures', 0)}")
+    if 'upload_stats' in st.session_state:
+        st.info(f"**Files Uploaded:** {st.session_state.upload_stats.get('count', 0)}")
+        st.info(f"**Total Failures:** {st.session_state.upload_stats.get('total_failures', 0)}")
+        st.info(f"**New Failures:** {st.session_state.upload_stats.get('new_failures', 0)}")
     
     # AI Status
     st.markdown("---")
@@ -212,32 +229,32 @@ with st.sidebar:
 # -----------------------------------------------------------
 # FILE UPLOAD SECTION
 # -----------------------------------------------------------
-st.markdown("## 📁 Upload AutomationAPI XML Reports")
-st.markdown("Upload multiple AutomationAPI XML test reports for AI-powered analysis")
+st.markdown("## 📁 Upload XML Reports")
+st.markdown("Upload multiple JUnit XML reports for simultaneous AI-powered analysis")
 
 uploaded_files = st.file_uploader(
-    "Choose AutomationAPI XML files",
+    "Choose XML files",
     type=["xml"],
     accept_multiple_files=True,
-    help="Select one or more AutomationAPI XML files to analyze"
+    help="Select one or more XML files to analyze"
 )
 
 if uploaded_files:
-    st.success(f"✅ {len(uploaded_files)} API test file(s) uploaded successfully!")
+    st.success(f"✅ {len(uploaded_files)} file(s) uploaded successfully!")
     
-    # Initialize session state
-    if 'api_all_results' not in st.session_state:
-        st.session_state.api_all_results = []
+    # Initialize session state for results
+    if 'all_results' not in st.session_state:
+        st.session_state.all_results = []
     
     # -----------------------------------------------------------
     # GLOBAL ANALYSIS BUTTON
     # -----------------------------------------------------------
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        analyze_all = st.button("🔍 Analyze All API Reports with AI", type="primary", use_container_width=True)
+        analyze_all = st.button("🔍 Analyze All Reports with AI", type="primary", use_container_width=True)
     
     if analyze_all:
-        st.session_state.api_all_results = []
+        st.session_state.all_results = []
         
         # Progress tracking
         progress_bar = st.progress(0)
@@ -246,31 +263,46 @@ if uploaded_files:
         for idx, xml_file in enumerate(uploaded_files):
             status_text.text(f"Processing {xml_file.name}... ({idx + 1}/{len(uploaded_files)})")
             
-            failures = safe_extract_api_failures(xml_file)
+            failures = safe_extract_failures(xml_file)
             
             if failures:
-                detected_project = detect_api_project(xml_file.name)
+                project_path = failures[0].get("projectCachePath", "")
+                detected_project = detect_project(project_path, xml_file.name)
                 
-                # Capture timestamp from first failure
+                # ✅ CAPTURE TIMESTAMP FROM FIRST FAILURE
                 execution_time = failures[0].get("timestamp", "Unknown")
                 
-                # Compare with baseline
-                baseline_exists = bool(load_automation_api_baseline(detected_project))
-                if baseline_exists:
-                    new_f, existing_f = compare_automation_api_baseline(detected_project, failures)
-                else:
-                    new_f, existing_f = failures, []
+                normalized = []
+                for f in failures:
+                    if f.get("name") != "__NO_FAILURES__":
+                        normalized.append({
+                            "testcase": f["name"],
+                            "testcase_path": f.get("testcase_path", ""),
+                            "error": f["error"],
+                            "details": f["details"],
+                            "source": xml_file.name,
+                            "webBrowserType": f.get("webBrowserType", "Unknown"),
+                            "projectCachePath": shorten_project_cache_path(f.get("projectCachePath", "")),
+                        })
                 
-                st.session_state.api_all_results.append({
+                # Compare with baseline
+                baseline_exists = bool(load_baseline(detected_project))
+                if baseline_exists:
+                    new_f, existing_f = compare_with_baseline(detected_project, normalized)
+                else:
+                    new_f, existing_f = normalized, []
+                
+                # ✅ STORE EXECUTION TIME IN RESULTS
+                st.session_state.all_results.append({
                     'filename': xml_file.name,
                     'project': detected_project,
                     'new_failures': new_f,
                     'existing_failures': existing_f,
                     'new_count': len(new_f),
                     'existing_count': len(existing_f),
-                    'total_count': len(failures),
+                    'total_count': len(normalized),
                     'baseline_exists': baseline_exists,
-                    'execution_time': execution_time
+                    'execution_time': execution_time  # ✅ ADD THIS LINE
                 })
             
             progress_bar.progress((idx + 1) / len(uploaded_files))
@@ -278,11 +310,11 @@ if uploaded_files:
         status_text.text("✅ Analysis complete!")
         progress_bar.empty()
         
-        # Update statistics
-        total_failures = sum(r['total_count'] for r in st.session_state.api_all_results)
-        new_failures = sum(r['new_count'] for r in st.session_state.api_all_results)
+        # Update upload statistics
+        total_failures = sum(r['total_count'] for r in st.session_state.all_results)
+        new_failures = sum(r['new_count'] for r in st.session_state.all_results)
         
-        st.session_state.api_upload_stats = {
+        st.session_state.upload_stats = {
             'count': len(uploaded_files),
             'total_failures': total_failures,
             'new_failures': new_failures
@@ -292,63 +324,66 @@ if uploaded_files:
         if use_ai and enable_batch_analysis:
             with st.spinner("🧠 Running batch pattern analysis..."):
                 all_failures = []
-                for result in st.session_state.api_all_results:
+                for result in st.session_state.all_results:
                     all_failures.extend(result['new_failures'])
                 
                 if all_failures:
-                    st.session_state.api_batch_analysis = generate_batch_analysis(all_failures)
+                    st.session_state.batch_analysis = generate_batch_analysis(all_failures)
     
     # -----------------------------------------------------------
     # DISPLAY RESULTS
     # -----------------------------------------------------------
-    if st.session_state.api_all_results:
+    if st.session_state.all_results:
         
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         
-        # Batch Analysis
-        if 'api_batch_analysis' in st.session_state and st.session_state.api_batch_analysis:
-            st.markdown('<div class="api-feature-box">', unsafe_allow_html=True)
+        # -----------------------------------------------------------
+        # 🆕 BATCH PATTERN ANALYSIS
+        # -----------------------------------------------------------
+        if 'batch_analysis' in st.session_state and st.session_state.batch_analysis:
+            st.markdown('<div class="ai-feature-box">', unsafe_allow_html=True)
             st.markdown("## 🧠 AI Batch Pattern Analysis")
-            st.markdown("AI has analyzed all API failures together to identify patterns and priorities.")
+            st.markdown("AI has analyzed all failures together to identify patterns and priorities.")
             st.markdown('</div>', unsafe_allow_html=True)
             
-            st.markdown(st.session_state.api_batch_analysis)
+            st.markdown(st.session_state.batch_analysis)
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         
         st.markdown("## 📊 Overall Summary")
         
         # Overall statistics
-        total_new = sum(r['new_count'] for r in st.session_state.api_all_results)
-        total_existing = sum(r['existing_count'] for r in st.session_state.api_all_results)
-        total_all = sum(r['total_count'] for r in st.session_state.api_all_results)
+        total_new = sum(r['new_count'] for r in st.session_state.all_results)
+        total_existing = sum(r['existing_count'] for r in st.session_state.all_results)
+        total_all = sum(r['total_count'] for r in st.session_state.all_results)
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("📄 Total Files", len(st.session_state.api_all_results))
+            st.metric("📄 Total Files", len(st.session_state.all_results))
         with col2:
-            st.metric("🆕 Total New API Failures", total_new, delta=f"+{total_new}" if total_new > 0 else "0", delta_color="inverse")
+            st.metric("🆕 Total New Failures", total_new, delta=f"+{total_new}" if total_new > 0 else "0", delta_color="inverse")
         with col3:
-            st.metric("♻️ Total Existing API Failures", total_existing)
+            st.metric("♻️ Total Existing Failures", total_existing)
         with col4:
-            st.metric("📈 Total All API Failures", total_all)
+            st.metric("📈 Total All Failures", total_all)
         
         # Comparison chart
-        render_api_comparison_chart(st.session_state.api_all_results)
+        render_comparison_chart(st.session_state.all_results)
         
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        st.markdown("## 📋 Detailed API Results by File")
+        st.markdown("## 📋 Detailed Results by File")
         
         # Individual file results
-        for idx, result in enumerate(st.session_state.api_all_results):
+        for idx, result in enumerate(st.session_state.all_results):
+            # ✅ FORMAT THE TIMESTAMP
             formatted_time = format_execution_time(result.get("execution_time", "Unknown"))
 
             with st.expander(
-                f"📄 {result['filename']} | ⏰ {formatted_time} — Project: {result['project']}",
+                f"📄 {result['filename']} | ⏰ {formatted_time} – Project: {result['project']}",
                 expanded=False
             ):
                 
-                # Summary card
-                render_api_summary_card(
+                # Summary card for this file
+                render_summary_card(
                     result['filename'],
                     result['new_count'],
                     result['existing_count'],
@@ -358,38 +393,32 @@ if uploaded_files:
                 st.markdown("---")
                 
                 # Tabs for different failure types
-                tab1, tab2, tab3 = st.tabs(["🆕 New API Failures", "♻️ Existing API Failures", "⚙️ Actions"])
+                tab1, tab2, tab3 = st.tabs(["🆕 New Failures", "♻️ Existing Failures", "⚙️ Actions"])
                 
                 with tab1:
                     if result['new_count'] == 0:
-                        st.success("✅ No new API failures detected!")
+                        st.success("✅ No new failures detected!")
                     else:
                         for i, f in enumerate(result['new_failures']):
                             with st.expander(f"🆕 {i+1}. {f['testcase']}", expanded=False):
-                                # API specific details
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    st.write("**Endpoint:**", f.get('apiEndpoint', 'Unknown'))
-                                with col2:
-                                    st.write("**Method:**", f.get('httpMethod', 'Unknown'))
-                                with col3:
-                                    st.write("**Status Code:**", f.get('statusCode', 'Unknown'))
+                                st.write("**Browser:**", f['webBrowserType'])
 
-                                # Test path
-                                st.markdown("**Test Path:**")
-                                st.code(f.get('testcase_path', ''), language="text")
+                                # Path (full width, readable)
+                                st.markdown("**Path:**")
+                                st.code(f['testcase_path'], language="text")
 
                                 # Error summary
                                 st.error(f"Error: {f['error']}")
 
-                                # Error details
+                                # Error details (copyable)
                                 st.markdown("**Error Details (click copy icon):**")
                                 st.code(f['details'], language="text")
 
+                                
                                 # AI Features
                                 if use_ai:
                                     ai_tabs = []
-                                    if True:
+                                    if True:  # Basic analysis always available
                                         ai_tabs.append("🤖 AI Analysis")
                                     if enable_jira_generation:
                                         ai_tabs.append("📝 Jira Ticket")
@@ -401,7 +430,7 @@ if uploaded_files:
                                         
                                         # Basic AI Analysis
                                         with ai_tab_objects[0]:
-                                            with st.spinner("Analyzing API failure..."):
+                                            with st.spinner("Analyzing..."):
                                                 ai_analysis = generate_ai_summary(f['testcase'], f['error'], f['details'])
                                                 st.info(ai_analysis)
                                         
@@ -419,7 +448,7 @@ if uploaded_files:
                                                     st.download_button(
                                                         "📥 Download Jira Content",
                                                         jira_content,
-                                                        file_name=f"jira_api_{f['testcase'][:30]}.txt",
+                                                        file_name=f"jira_{f['testcase'][:30]}.txt",
                                                         key=f"jira_{idx}_{i}"
                                                     )
                                         
@@ -438,21 +467,14 @@ if uploaded_files:
                 
                 with tab2:
                     if result['existing_count'] == 0:
-                        st.info("ℹ️ No existing API failures found in baseline")
+                        st.info("ℹ️ No existing failures found in baseline")
                     else:
-                        st.warning(f"Found {result['existing_count']} known API failures")
+                        st.warning(f"Found {result['existing_count']} known failures")
                         for i, f in enumerate(result['existing_failures']):
                             with st.expander(f"♻️ {i+1}. {f['testcase']}", expanded=False):
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    st.write("**Endpoint:**", f.get('apiEndpoint', 'Unknown'))
-                                with col2:
-                                    st.write("**Method:**", f.get('httpMethod', 'Unknown'))
-                                with col3:
-                                    st.write("**Status Code:**", f.get('statusCode', 'Unknown'))
-                                
-                                st.markdown("**Test Path:**")
-                                st.code(f.get('testcase_path', ''), language="text")
+                                st.write("**Browser:**", f['webBrowserType'])
+                                st.markdown("**Path:**")
+                                st.code(f['testcase_path'], language="text")
                                 st.error(f"Error: {f['error']}")
                                 st.markdown("**Error Details:**")
                                 st.code(f['details'], language="text")
@@ -469,14 +491,14 @@ if uploaded_files:
                             else:
                                 try:
                                     all_failures = result['new_failures'] + result['existing_failures']
-                                    save_automation_api_baseline(result['project'], all_failures, admin_key)
-                                    st.success("✅ API Baseline saved successfully!")
+                                    save_baseline(result['project'], all_failures, admin_key)
+                                    st.success("✅ Baseline saved successfully!")
                                 except Exception as e:
                                     st.error(f"❌ Error: {str(e)}")
                     
                     with col2:
                         if result['baseline_exists']:
-                            st.success("✅ Baseline exists for this API project")
+                            st.success("✅ Baseline exists for this project")
                         else:
                             st.warning("⚠️ No baseline found")
                     
@@ -489,37 +511,37 @@ if uploaded_files:
                         st.download_button(
                             label="📥 Download as CSV",
                             data=csv,
-                            file_name=f"{result['filename']}_api_failures.csv",
+                            file_name=f"{result['filename']}_failures.csv",
                             mime="text/csv",
                             key=f"export_{idx}"
                         )
 
 else:
-    # Welcome message
-    st.info("👆 Upload one or more AutomationAPI XML files to begin AI-powered analysis")
+    # Welcome message when no files uploaded
+    st.info("👆 Upload one or more XML files to begin AI-powered analysis")
     
-    st.markdown("### 🎯 AutomationAPI Features")
+    st.markdown("### 🎯 Features")
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("**📊 Multi-File Analysis**")
-        st.write("Upload and analyze multiple API test reports simultaneously")
+        st.write("Upload and analyze multiple XML reports simultaneously")
     with col2:
         st.markdown("**🤖 AI-Powered Insights**")
-        st.write("Get intelligent API failure analysis")
+        st.write("Get intelligent failure analysis with Groq (FREE)")
     with col3:
         st.markdown("**📈 Baseline Tracking**")
-        st.write("Compare API results against historical baselines")
+        st.write("Compare results against historical baselines")
     
     st.markdown("---")
     
-    st.markdown("### 🔌 API-Specific Analysis")
+    st.markdown("### 🆕 New AI Features")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("**🌐 Endpoint Tracking**")
-        st.write("Track failures by API endpoint")
+        st.markdown("**🧠 Batch Pattern Analysis**")
+        st.write("AI identifies common patterns across all failures")
     with col2:
-        st.markdown("**📊 HTTP Method Analysis**")
-        st.write("Analyze failures by HTTP method (GET, POST, etc.)")
+        st.markdown("**📝 Jira Auto-Generation**")
+        st.write("Create ready-to-use Jira tickets instantly")
     with col3:
-        st.markdown("**🔢 Status Code Monitoring**")
-        st.write("Monitor and track API response status codes")
+        st.markdown("**💡 Test Improvements**")
+        st.write("Get suggestions to make tests more stable")
