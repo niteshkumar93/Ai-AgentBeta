@@ -1,6 +1,33 @@
 import xml.etree.ElementTree as ET
 from typing import List, Dict
 import re
+def extract_actual_spec_name(testcase_node) -> str:
+    """
+    Extract real Provar Spec file name PER TESTCASE.
+    This fixes multi-spec collapsing.
+    """
+
+    # 1️⃣ classname itself is the spec (best & most reliable)
+    classname = testcase_node.attrib.get("classname", "")
+    if classname.endswith("Spec"):
+        return classname
+
+    # 2️⃣ Look inside failure text of THIS testcase only
+    failure = testcase_node.find("failure")
+    if failure is not None:
+        failure_text = (failure.text or "") + " " + (failure.attrib.get("message", ""))
+        match = re.search(r'([A-Za-z0-9_]+Spec)', failure_text)
+        if match:
+            return match.group(1)
+
+    # 3️⃣ Look inside testcase name
+    test_name = testcase_node.attrib.get("name", "")
+    match = re.search(r'([A-Za-z0-9_]+Spec)', test_name)
+    if match:
+        return match.group(1)
+
+    # 4️⃣ Fallback (flow name)
+    return classname or "Unknown_Spec"
 
 
 def extract_project_name(xml_file) -> str:
@@ -11,7 +38,6 @@ def extract_project_name(xml_file) -> str:
     xml_file.seek(0)
     tree = ET.parse(xml_file)
     root = tree.getroot()
-
     # Try to find workspace path in failure messages
     for testcase in root.findall(".//testcase"):
         failure = testcase.find("failure")
@@ -34,7 +60,6 @@ def is_skipped_failure(error_message: str) -> bool:
         "previous step has failed with error"
     ]
     return any(indicator in error_message for indicator in skip_indicators)
-
 
 def clean_error_message(raw_message: str) -> tuple:
     """
@@ -67,6 +92,7 @@ def extract_automation_api_failures(xml_file) -> List[Dict]:
     xml_file.seek(0)
     tree = ET.parse(xml_file)
     root = tree.getroot()
+    full_xml_text = ET.tostring(root, encoding="unicode")
 
     # Extract project name
     project_name = extract_project_name(xml_file)
@@ -98,15 +124,8 @@ def extract_automation_api_failures(xml_file) -> List[Dict]:
             failure = testcase.find("failure")
             
             if failure is not None:
-                # Extract spec name from classname or suite name
-                classname = testcase.attrib.get("classname", "")
-                
-                # Use classname as spec if it's different from suite, otherwise use suite name
-                if classname and classname != suite_name:
-                    spec_name = classname
-                else:
-                    spec_name = suite_name
-                
+                spec_name = extract_actual_spec_name(testcase)
+                classname = testcase.attrib.get("classname", "Unknown")
                 test_name = testcase.attrib.get("name", "Unknown Test")
                 test_time = testcase.attrib.get("time", "0")
                 
