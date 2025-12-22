@@ -77,7 +77,7 @@ KNOWN_PROJECTS = [
     "Internationalization_pipeline", "Lightning_Console_LogonAs",
     "DynamicForm", "Classic_Console_LogonAS", "LWC_Pipeline",
     "Regmain_LS_Windows", "Regmain_LC_Windows",
-    "Regmain-VF", "FSL", "HYBRID_AUTOMATION_Pipeline",
+    "Regmain-VF", "FSL", "HYBRID_AUTOMATION_Pipeline","Prerelease-Lightning",
 ]
 
 APP_VERSION = "3.0.0"  # New version with AutomationAPI support

@@ -33,6 +33,7 @@ KNOWN_PROJECTS = [
     "Regmain-VF",
     "FSL",
     "HYBRID_AUTOMATION_Pipeline",
+    "Prerelease-Lightning",
 ]
 
 # -----------------------------------------------------------
