@@ -85,7 +85,7 @@ def safe_extract_failures(uploaded_file):
         return []
 
 def detect_project(path: str, filename: str):
-    for p in KNOWN_PROJECTS:
+    for p in UNKNOWN_PROJECTS:
         if path and (f"/{p}" in path or f"\\{p}" in path):
             return p
         if p.lower() in filename.lower():
