@@ -100,7 +100,7 @@ def detect_project(path: str, filename: str):
             return p
         if p.lower() in filename.lower():
             return p
-    return KNOWN_PROJECTS[0]
+    return "UNKNOWN_PROJECT"
 
 def shorten_project_cache_path(path):
     if not path:
@@ -525,7 +525,17 @@ if report_type == "Provar Regression Reports":
                     
                     with tab3:
                         st.markdown("### 🛠️ Baseline Management")
-                        
+                        st.markdown("### 📌 Select Project for Baseline")
+                        project_options = KNOWN_PROJECTS
+                        selected_project = result['project']
+                        if result['project'] == "UNKNOWN_PROJECT":
+                            selected_project = st.selectbox(
+                                "Choose correct project",
+                                options=project_options,
+                                 key=f"project_select_{idx}"
+                                 )
+                        else:
+                            st.info(f"Detected Project: {result['project']}")
                         col1, col2 = st.columns(2)
                         with col1:
                             if st.button(f"💾 Save as Baseline", key=f"save_provar_{idx}"):
@@ -534,7 +544,11 @@ if report_type == "Provar Regression Reports":
                                 else:
                                     try:
                                         all_failures = result['new_failures'] + result['existing_failures']
-                                        save_provar_baseline(result['project'], all_failures, admin_key)
+                                        if selected_project == "UNKNOWN_PROJECT":
+                                            st.error("Please select a project before saving baseline.")
+                                        else:
+                                            save_baseline(selected_project, all_failures, admin_key)
+                                            st.success("Baseline saved successfully!")    
                                         st.success("✅ Provar baseline saved successfully!")
                                     except Exception as e:
                                         st.error(f"❌ Error: {str(e)}")
