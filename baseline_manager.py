@@ -34,6 +34,10 @@ KNOWN_PROJECTS = [
     "FSL",
     "HYBRID_AUTOMATION_Pipeline",
     "Prerelease-Lightning",
+    "Smoke_LC_Windows",
+    "Smoke_CC_Windows",
+    "Smoke_LS_Windows",
+    "Smoke_CS_Windows",
 ]
 
 # -----------------------------------------------------------
