@@ -100,6 +100,8 @@ def detect_project(path: str, filename: str):
             return p
         if p.lower() in filename.lower():
             return p
+    if "datetime" in filename.lower():
+        return "Date_Time"
     return "UNKNOWN_PROJECT"
 
 def shorten_project_cache_path(path):
