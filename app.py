@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
-from baseline_manager import save_baseline
+from baseline_manager import save_baseline, load_baseline
 from baseline_tracker_dashboard import render_baseline_tracker_dashboard
+import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import io
 import os
 from datetime import datetime
 
@@ -46,6 +49,7 @@ from ai_reasoner import (
     suggest_test_improvements
 )
 from baseline_manager import (
+    save_baseline as save_provar_baseline,
     compare_with_baseline as compare_provar_baseline,
     load_baseline as load_provar_baseline
 )
@@ -61,6 +65,7 @@ from automation_api_extractor import (
 from automation_api_baseline_manager import (
     save_baseline as save_api_baseline,
     compare_with_baseline as compare_api_baseline,
+    load_baseline as load_api_baseline,
     baseline_exists as api_baseline_exists
 )
 
