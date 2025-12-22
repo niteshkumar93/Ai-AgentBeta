@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from baseline_manager import save_baseline, load_baseline
+from baseline_tracker_dashboard import render_baseline_tracker_dashboard
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -282,8 +283,12 @@ with st.sidebar:
 # -----------------------------------------------------------
 # MAIN CONTENT AREA
 # -----------------------------------------------------------
+# BASELINE TRACKER DASHBOARD (SEPARATE PAGE)
+# ===========================================================
+if st.session_state.get("show_baseline_tracker", False):
+    render_baseline_tracker_dashboard()
 
-if report_type == "Provar Regression Reports":
+elif report_type == "Provar Regression Reports":
     # ============================================================
     # PROVAR XML REPORT ANALYSIS (EXISTING FUNCTIONALITY - COMPLETE)
     # ============================================================
@@ -527,6 +532,70 @@ if report_type == "Provar Regression Reports":
                     
                     with tab3:
                         st.markdown("### 🛠️ Baseline Management")
+                        st.markdown("### 🔍 Compare With Multiple Baselines")
+                        from baseline_engine import (
+                            load_project_baselines,
+                            get_latest_baseline,
+                            compare_failures,
+                            delete_baseline,
+                            )
+                        baselines = load_project_baselines(selected_project)
+                        if not baselines:
+                            st.info("No baselines available for this project.")
+                        else: 
+                            mode = st.radio(
+                                "Comparison Mode",
+                                ["Latest baseline (recommended)", "Select baseline(s)", "Compare with all"],
+                                horizontal=True
+                                 )
+                            selected_baselines = []
+                            if mode == "Latest baseline (recommended)":
+                                selected_baselines = [baselines[0]]
+                            elif mode == "Select baseline(s)":
+                                labels = {
+                                    f"{b['label']} — {b['created_at']}": b
+                                    for b in baselines
+                                    }
+                                chosen = st.multiselect(  
+                                        "Choose baselines to compare against:",
+                                        options=list(labels.keys())
+                                    )
+                                selected_baselines = [labels[c] for c in chosen]
+                            else:
+                                    selected_baselines = baselines
+                                    detailed = st.checkbox("Detailed per-baseline diff (slower)", value=False)
+
+                            if st.button("🔄 Run Baseline Comparison"):
+                                    for b in selected_baselines:
+                                        new_f, existing_f = compare_failures(
+                                            result['new_failures'] + result['existing_failures'],
+                                            b
+                                        )
+                                        st.markdown(
+                                            f"#### 📌 Baseline: **{b['label']}** ({b['created_at']})"
+                                        )
+                                        col1, col2 = st.columns(2)
+                                        col1.metric("🆕 New Failures", len(new_f))
+                                        col2.metric("♻️ Existing Failures", len(existing_f))
+
+                                        if detailed:
+                                            with st.expander("View Detailed Diff"):
+                                                st.write("🆕 New Failures")
+                                                st.json(new_f)
+                                                st.write("♻️ Existing Failures")
+                                                st.json(existing_f)
+                       # Admin-only delete
+                    if admin_key:
+                        st.markdown("### 🗑️ Admin Baseline Cleanup")
+                        for b in baselines:
+                            if st.button(
+                                f"Delete {b['label']} ({b['id']})",
+                                key=f"del_{b['id']}"
+                            ): 
+                                delete_baseline(selected_project, b["id"])
+                                st.success("Baseline deleted. Refresh page.")
+                                st.rerun()                         
+  # ------------------------------------------------------------  #                           
                         st.markdown("### 📌 Select Project for Baseline")
                         project_options = KNOWN_PROJECTS
                         selected_project = result['project']
@@ -540,7 +609,7 @@ if report_type == "Provar Regression Reports":
                             st.info(f"Detected Project: {result['project']}")
                         col1, col2 = st.columns(2)
                         with col1:
-                            if st.button(f"💾 Save as Baseline", key=f"save_provar_{idx}"):
+                            if st.button(f"💾 Save as Baseline", key=f"save_provar_{idx}"):    
                                 if not admin_key:
                                     st.error("❌ Admin key required!")
                                 else:
@@ -554,7 +623,7 @@ if report_type == "Provar Regression Reports":
                                         st.success("✅ Provar baseline saved successfully!")
                                     except Exception as e:
                                         st.error(f"❌ Error: {str(e)}")
-                        
+                                
                         with col2:
                             if result['baseline_exists']:
                                 st.success("✅ Baseline exists for this project")
