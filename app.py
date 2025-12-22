@@ -70,6 +70,14 @@ from automation_api_baseline_manager import (
 # -----------------------------------------------------------
 # CONSTANTS
 # -----------------------------------------------------------
+KNOWN_PROJECTS = [
+    "VF_Lightning_Windows", "Regmain-Flexi", "DateTime",
+    "CPQ_Classic", "CPQ_Lightning", "QAM_Lightning", "QAM_Classic",
+    "Internationalization_pipeline", "Lightning_Console_LogonAs",
+    "DynamicForm", "Classic_Console_LogonAS", "LWC_Pipeline",
+    "Regmain_LS_Windows", "Regmain_LC_Windows",
+    "Regmain-VF", "FSL", "HYBRID_AUTOMATION_Pipeline",
+]
 
 APP_VERSION = "3.0.0"  # New version with AutomationAPI support
 
@@ -85,7 +93,7 @@ def safe_extract_failures(uploaded_file):
         return []
 
 def detect_project(path: str, filename: str):
-    for p in UNKNOWN_PROJECTS:
+    for p in KNOWN_PROJECTS:
         if path and (f"/{p}" in path or f"\\{p}" in path):
             return p
         if p.lower() in filename.lower():
