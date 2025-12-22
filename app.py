@@ -134,7 +134,7 @@ def render_comparison_chart(all_results):
     df_data = []
     for result in all_results:
         df_data.append({
-            'File': result['filename'][:30] + '...' if len(result['filename']) > 30 else result['filename'],
+            'File': result['project'],
             'New Failures': result['new_count'],
             'Existing Failures': result['existing_count'],
             'Total': result['total_count']
