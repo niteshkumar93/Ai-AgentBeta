@@ -1,39 +1,80 @@
 import os
 import json
 from datetime import datetime
+from typing import List, Dict
 
+# -------------------------------------------------
+# CONFIG
+# -------------------------------------------------
 BASELINE_DIR = "data/baseline"
+MAX_BASELINES_PER_PROJECT = 10
+
 os.makedirs(BASELINE_DIR, exist_ok=True)
 
-MAX_BASELINES = 10
-
-
-# -----------------------------
-# Internal helpers
-# -----------------------------
+# -------------------------------------------------
+# INTERNAL HELPERS
+# -------------------------------------------------
 def _project_file(project: str) -> str:
-    safe_project = project.replace(" ", "_")
-    return os.path.join(BASELINE_DIR, f"{safe_project}.json")
+    safe = project.replace(" ", "_")
+    return os.path.join(BASELINE_DIR, f"{safe}.json")
 
 
-def _load_project_data(project: str) -> dict:
-    path = _project_file(project)
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
-    return {"baselines": []}
+# -------------------------------------------------
+# EXISTING FUNCTIONS (DO NOT BREAK)
+# -------------------------------------------------
+def load_baseline(project: str = None):
+    """
+    Backward compatible:
+    - If project provided → return latest baseline
+    - Else → return empty dict
+    """
+    if not project:
+        return {}
+
+    file = _project_file(project)
+    if not os.path.exists(file):
+        return {}
+
+    with open(file, "r") as f:
+        data = json.load(f)
+
+    baselines = data.get("baselines", [])
+    return baselines[-1]["failures"] if baselines else {}
 
 
-def _save_project_data(project: str, data: dict):
-    with open(_project_file(project), "w") as f:
+def save_baseline(project: str, failures: list, admin_key: str, label: str = ""):
+    """
+    Save a new baseline for a project
+    """
+    file = _project_file(project)
+
+    if os.path.exists(file):
+        with open(file, "r") as f:
+            data = json.load(f)
+    else:
+        data = {"project": project, "baselines": []}
+
+    baselines = data["baselines"]
+
+    # Enforce max baseline limit
+    if len(baselines) >= MAX_BASELINES_PER_PROJECT:
+        baselines.pop(0)
+
+    baselines.append({
+        "id": f"{project}-{len(baselines)+1}",
+        "created_at": datetime.utcnow().isoformat(),
+        "label": label or "Auto",
+        "failures": failures
+    })
+
+    with open(file, "w") as f:
         json.dump(data, f, indent=2)
 
 
-# -----------------------------
-# PUBLIC API (USED BY APP/UI)
-# -----------------------------
-
-def list_projects():
+# -------------------------------------------------
+# NEW FUNCTIONS (STEP 2 & STEP 3 REQUIRE THESE)
+# -------------------------------------------------
+def list_projects() -> List[str]:
     return [
         f.replace(".json", "")
         for f in os.listdir(BASELINE_DIR)
@@ -41,73 +82,35 @@ def list_projects():
     ]
 
 
-def list_baselines(project: str):
-    data = _load_project_data(project)
-    return data.get("baselines", [])
+def list_baselines(project: str) -> List[Dict]:
+    file = _project_file(project)
+    if not os.path.exists(file):
+        return []
+
+    with open(file, "r") as f:
+        return json.load(f).get("baselines", [])
 
 
-def save_baseline(
-    project: str,
-    failures: list,
-    label: str | None = None,
-):
-    data = _load_project_data(project)
-
-    baseline = {
-        "id": datetime.utcnow().strftime("%Y%m%d%H%M%S"),
-        "created_at": datetime.utcnow().isoformat(),
-        "label": label or "Unnamed baseline",
-        "total_failures": len(failures),
-        "failures": failures,
-    }
-
-    data["baselines"].append(baseline)
-
-    # Keep only last N baselines
-    data["baselines"] = data["baselines"][-MAX_BASELINES :]
-
-    _save_project_data(project, data)
+def load_baseline_by_id(project: str, baseline_id: str) -> Dict:
+    baselines = list_baselines(project)
+    for b in baselines:
+        if b["id"] == baseline_id:
+            return b
+    return {}
 
 
 def delete_baseline(project: str, baseline_id: str):
-    data = _load_project_data(project)
+    file = _project_file(project)
+    if not os.path.exists(file):
+        return
+
+    with open(file, "r") as f:
+        data = json.load(f)
+
     data["baselines"] = [
-        b for b in data["baselines"] if b["id"] != baseline_id
-    ]
-    _save_project_data(project, data)
-
-
-def get_latest_baseline(project: str):
-    baselines = list_baselines(project)
-    return baselines[-1] if baselines else None
-
-
-def compare_with_baseline(project: str, new_failures: list):
-    """
-    Default comparison → latest baseline only
-    """
-    baseline = get_latest_baseline(project)
-    if not baseline:
-        return new_failures, []
-
-    old_set = {
-        (f["testcase"], f["error"])
-        for f in baseline["failures"]
-    }
-
-    new_set = {
-        (f["testcase"], f["error"])
-        for f in new_failures
-    }
-
-    new_only = [
-        f for f in new_failures
-        if (f["testcase"], f["error"]) not in old_set
+        b for b in data.get("baselines", [])
+        if b["id"] != baseline_id
     ]
 
-    existing = [
-        f for f in new_failures
-        if (f["testcase"], f["error"]) in old_set
-    ]
-
-    return new_only, existing
+    with open(file, "w") as f:
+        json.dump(data, f, indent=2)
