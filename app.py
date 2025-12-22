@@ -282,6 +282,26 @@ with st.sidebar:
 # -----------------------------------------------------------
 # MAIN CONTENT AREA
 # -----------------------------------------------------------
+if page == "📈 Baseline Tracker":
+    render_baseline_tracker_dashboard()
+else: 
+    st.markdown("## 📁 Upload Provar XML Reports")
+    st.markdown("Upload multiple JUnit XML reports from Provar test executions for simultaneous AI-powered analysis")
+    
+    uploaded_files = st.file_uploader(
+        "Choose Provar XML files",
+        type=["xml"],
+        accept_multiple_files=True,
+        key="provar_uploader",
+        help="Select one or more XML files to analyze"
+    )
+    
+    if uploaded_files:
+        st.success(f"✅ {len(uploaded_files)} Provar file(s) uploaded successfully!")
+        
+        # Initialize session state for results
+        if 'all_results' not in st.session_state:
+            st.session_state.all_results = []
 
 if report_type == "Provar Regression Reports":
     # ============================================================
