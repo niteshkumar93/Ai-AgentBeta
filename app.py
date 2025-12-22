@@ -71,12 +71,14 @@ from automation_api_baseline_manager import (
 # CONSTANTS
 # -----------------------------------------------------------
 KNOWN_PROJECTS = [
-    "VF_Lightning_Windows", "Regmain-Flexi", "Date_Time",
+    "VF_Lightning_Windows", "Regmain-Flexi", "DateTime",
     "CPQ_Classic", "CPQ_Lightning", "QAM_Lightning", "QAM_Classic",
     "Internationalization_pipeline", "Lightning_Console_LogonAs",
     "DynamicForm", "Classic_Console_LogonAS", "LWC_Pipeline",
     "Regmain_LS_Windows", "Regmain_LC_Windows",
-    "Regmain-VF", "FSL", "HYBRID_AUTOMATION_Pipeline",
+    "Regmain-VF", "FSL", "HYBRID_AUTOMATION_Pipeline","VF_Lightning_Windows"
+   #automationAPI Known Projects
+
 ]
 
 APP_VERSION = "3.0.0"  # New version with AutomationAPI support
