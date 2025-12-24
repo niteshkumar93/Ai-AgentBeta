@@ -1,6 +1,8 @@
 import json
 import os
 from typing import List, Dict
+
+# Known AutomationAPI projects
 KNOWN_PROJECTS = [
     "AutomationAPI_LightningLWC"
 ]
@@ -9,6 +11,7 @@ KNOWN_PROJECTS = [
 BASELINE_DIR = "baselines/automation_api"
 os.makedirs(BASELINE_DIR, exist_ok=True)
 
+
 def _get_baseline_path(project_name: str) -> str:
     """Get baseline file path for AutomationAPI project"""
     return os.path.join(BASELINE_DIR, f"{project_name}.json")
@@ -16,7 +19,16 @@ def _get_baseline_path(project_name: str) -> str:
 
 def baseline_exists(project_name: str) -> bool:
     """Check if baseline exists for this AutomationAPI project"""
-    return os.path.exists(_get_baseline_path(project_name))
+    path = _get_baseline_path(project_name)
+    if not os.path.exists(path):
+        return False
+    
+    # Check if file has content
+    try:
+        baseline = load_baseline(project_name)
+        return len(baseline) > 0
+    except:
+        return False
 
 
 def load_baseline(project_name: str) -> List[Dict]:
@@ -46,22 +58,30 @@ def save_baseline(project_name: str, failures: List[Dict], admin_key: str):
     if admin_key != expected:
         raise PermissionError("❌ Admin key invalid")
     
-    # Clean up failures before saving (remove internal flags)
+    # Clean up failures before saving (remove internal flags and metadata)
     clean_failures = []
     for f in failures:
-        if not f.get("_no_failures"):
-            clean_failure = {
-                "project": f.get("project"),
-                "spec_file": f.get("spec_file"),
-                "test_name": f.get("test_name"),
-                "error_summary": f.get("error_summary"),
-                "is_skipped": f.get("is_skipped", False)
-            }
-            clean_failures.append(clean_failure)
+        # Skip metadata-only records
+        if f.get("_no_failures"):
+            continue
+        
+        # Create clean failure record with essential fields
+        clean_failure = {
+            "project": f.get("project"),
+            "spec_file": f.get("spec_file"),
+            "test_name": f.get("test_name"),
+            "error_summary": f.get("error_summary"),
+            "error_details": f.get("error_details", ""),  # Include for better matching
+            "is_skipped": f.get("is_skipped", False)
+        }
+        clean_failures.append(clean_failure)
     
+    # Save to file
     path = _get_baseline_path(project_name)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(clean_failures, f, indent=2)
+    
+    print(f"✅ Saved {len(clean_failures)} AutomationAPI baseline failures for {project_name}")
 
 
 def compare_with_baseline(project_name: str, current_failures: List[Dict]):
@@ -71,11 +91,21 @@ def compare_with_baseline(project_name: str, current_failures: List[Dict]):
     """
     baseline = load_baseline(project_name)
     
-    # Create signature for baseline failures (spec + test_name + error)
-    baseline_sigs = {
-        f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}"
-        for b in baseline
-    }
+    # If no baseline exists, all failures are new
+    if not baseline:
+        # Filter out metadata-only records
+        real_failures = [f for f in current_failures if not f.get("_no_failures")]
+        return real_failures, []
+    
+    # Create signature for baseline failures
+    # Use spec_file + test_name + error_summary for matching
+    baseline_sigs = set()
+    for b in baseline:
+        spec = b.get('spec_file', '')
+        test = b.get('test_name', '')
+        error = b.get('error_summary', '')
+        sig = f"{spec}|{test}|{error}"
+        baseline_sigs.add(sig)
     
     new_failures = []
     existing_failures = []
@@ -85,7 +115,11 @@ def compare_with_baseline(project_name: str, current_failures: List[Dict]):
         if failure.get("_no_failures"):
             continue
         
-        sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}"
+        # Create signature for current failure
+        spec = failure.get('spec_file', '')
+        test = failure.get('test_name', '')
+        error = failure.get('error_summary', '')
+        sig = f"{spec}|{test}|{error}"
         
         if sig in baseline_sigs:
             existing_failures.append(failure)
@@ -105,3 +139,25 @@ def list_available_baselines() -> List[str]:
         for f in os.listdir(BASELINE_DIR)
         if f.endswith(".json")
     ]
+
+
+def get_baseline_info(project_name: str) -> Dict:
+    """Get information about a baseline"""
+    baseline = load_baseline(project_name)
+    
+    if not baseline:
+        return {
+            "exists": False,
+            "count": 0,
+            "specs": []
+        }
+    
+    specs = list(set(f.get('spec_file', 'Unknown') for f in baseline))
+    
+    return {
+        "exists": True,
+        "count": len(baseline),
+        "specs": specs,
+        "real_failures": len([f for f in baseline if not f.get('is_skipped')]),
+        "skipped_failures": len([f for f in baseline if f.get('is_skipped')])
+    }
