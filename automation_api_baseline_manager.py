@@ -2,7 +2,6 @@ import json
 import os
 from typing import List, Dict
 
-# Known AutomationAPI projects
 KNOWN_PROJECTS = [
     "AutomationAPI_LightningLWC"
 ]
