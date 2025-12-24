@@ -1,6 +1,9 @@
 import json
 import os
 from typing import List, Dict
+KNOWN_PROJECTS = [
+    "AutomationAPI_LightningLWC"
+]
 
 # Separate baseline directory for AutomationAPI
 BASELINE_DIR = "baselines/automation_api"
