@@ -4,7 +4,13 @@ from typing import List, Dict
 KNOWN_PROJECTS = [
     "AutomationAPI_LightningLWC"
 ]
-
+# -----------------------------------------------------------
+# BASELINE LIST (KNOWN PROJECTS)
+# -----------------------------------------------------------
+KNOWN_PROJECTS = [
+    "AutomationAPI_LightningLWC"
+    
+]
 # Separate baseline directory for AutomationAPI
 BASELINE_DIR = "baselines/automation_api"
 os.makedirs(BASELINE_DIR, exist_ok=True)
