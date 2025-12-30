@@ -24,6 +24,36 @@ try:
 except ImportError:
     MULTI_BASELINE_AVAILABLE = False
     print("⚠️ Multi-baseline engine not available, using legacy baseline manager")
+    # -----------------------------------------------------------
+# IMPORT AUTOMATIONAPI MODULES (NEW)
+# -----------------------------------------------------------
+from automation_api_extractor import (
+    extract_automation_api_failures,
+    group_failures_by_spec,
+    get_failure_statistics
+)
+
+# Import BOTH old and new baseline managers for AutomationAPI
+from automation_api_baseline_manager import (
+    save_baseline as save_api_baseline_legacy,
+    compare_with_baseline as compare_api_baseline_legacy,
+    load_baseline as load_api_baseline_legacy,
+    baseline_exists as api_baseline_exists_legacy
+)
+
+try:
+    from automation_api_baseline_engine import (
+        save_baseline as save_api_baseline_multi,
+        compare_with_baseline as compare_api_baseline_multi,
+        list_baselines as list_api_baselines,
+        get_baseline_stats as get_api_baseline_stats,
+        baseline_exists as api_baseline_exists_multi,
+        get_latest_baseline as get_api_latest_baseline
+    )
+    API_MULTI_BASELINE_AVAILABLE = True
+except ImportError:
+    API_MULTI_BASELINE_AVAILABLE = False
+    print("⚠️ AutomationAPI multi-baseline engine not available")
 
 # -----------------------------------------------------------
 # IMPORT OLD BASELINE MANAGER (BACKWARD COMPATIBILITY - ALWAYS WORKS)
