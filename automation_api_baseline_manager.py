@@ -7,8 +7,32 @@ from typing import List, Dict
 KNOWN_PROJECTS = [
     "LightningLWC",
     "Flexi5",
-    "Flexi3"
+    Flexi1
+    "Flexi3",
+    "ClassicAndMisc",
+    "QuickActions"
+    "FSL3",
+    "FSL2",
+    "FSL1",
+    "FSL",
+    "CPQ",
+    "CPQ1",
+    "CPQ2",
+    "Flexi4",
+    "Flexi1",
+    "Flexi2",
+    "Lightning1",
+    "Lightning2",
+    "Lightning3",
+    "Lightning4",
+    "VF",
+    "HybridLwc",
+    "NonSf1",
+    "CQF_SalesLightning",
+    "CQF_CPQLightning1",
+    "CQF_CPQLightning2"
 ]
+
 # Separate baseline directory for AutomationAPI
 BASELINE_DIR = "baselines/automation_api"
 os.makedirs(BASELINE_DIR, exist_ok=True)
