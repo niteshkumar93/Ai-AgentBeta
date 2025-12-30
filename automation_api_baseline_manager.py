@@ -1,9 +1,6 @@
 import json
 import os
 from typing import List, Dict
-KNOWN_PROJECTS = [
-    "AutomationAPI_LightningLWC"
-]
 # -----------------------------------------------------------
 # BASELINE LIST (KNOWN PROJECTS)
 # -----------------------------------------------------------
