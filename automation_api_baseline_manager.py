@@ -5,9 +5,9 @@ from typing import List, Dict
 # BASELINE LIST (KNOWN PROJECTS)
 # -----------------------------------------------------------
 KNOWN_PROJECTS = [
-    "AutomationAPI_LightningLWC",
-    "AutomationAPI_Flexi5",
-    "AutomationAPI_Flexi3"
+    "LightningLWC",
+    "Flexi5",
+    "Flexi3"
 ]
 # Separate baseline directory for AutomationAPI
 BASELINE_DIR = "baselines/automation_api"
