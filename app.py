@@ -76,7 +76,13 @@ def format_execution_time(raw_time: str):
     """Format timestamp from XML to readable format"""
     if raw_time in (None, "", "Unknown"):
         return "Unknown"
-
+def _format_time(ts: str):
+    """Format timestamp string to readable format"""
+    try:
+        dt = datetime.strptime(ts, "%Y%m%d_%H%M%S")
+        return dt.strftime("%d %b %Y, %H:%M")
+    except Exception:
+        return ts
     # Try different datetime formats
     formats_to_try = [
         "%Y-%m-%dT%H:%M:%S",           # ISO format: 2025-01-15T14:30:00
@@ -739,7 +745,6 @@ elif report_type == "Provar Regression Reports":
                                 mime="text/csv",
                                 key=f"export_provar_{idx}"
                             )
-    
     else:
         # Welcome message when no files uploaded
         st.info("👆 Upload one or more Provar XML files to begin AI-powered analysis")
@@ -818,16 +823,43 @@ else:
                     if failures:
                         project = failures[0].get("project", "Unknown")
                         
-                        # Check baseline
-                        baseline_exists_flag = api_baseline_exists(project)
+                       # ============================================================
+                        # COMPARE WITH BASELINE (MULTI-BASELINE AWARE)
+                        # ============================================================
                         
                         # Filter out metadata record
                         real_failures = [f for f in failures if not f.get("_no_failures")]
                         
-                        if baseline_exists_flag and real_failures:
-                            new_f, existing_f = compare_api_baseline(project, real_failures)
+                        # Determine which baseline system to use
+                        if API_MULTI_BASELINE_AVAILABLE and use_multi_baseline:
+                            # Use multi-baseline engine
+                            if api_baseline_exists_multi(project):
+                                # Compare with latest baseline
+                                new_f, existing_f = compare_api_baseline_multi(
+                                    project,
+                                    real_failures
+                                )
+                            else:
+                                # No baseline exists - all failures are new
+                                new_f, existing_f = real_failures, []
+                            
+                            # Check baseline existence
+                            baseline_exists_flag = api_baseline_exists_multi(project)
+                        
                         else:
-                            new_f, existing_f = real_failures, []
+                            # Use legacy single-baseline system
+                            if api_baseline_exists_legacy(project):
+                                # Compare with single baseline
+                                new_f, existing_f = compare_api_baseline_legacy(
+                                    project,
+                                    real_failures
+                                )
+                            else:
+                                # No baseline exists - all failures are new
+                                new_f, existing_f = real_failures, []
+                            
+                            # Check baseline existence
+                            baseline_exists_flag = api_baseline_exists_legacy(project)
                         
                         # Get statistics
                         stats = get_failure_statistics(real_failures if real_failures else failures)
@@ -994,30 +1026,128 @@ else:
                             
                             st.markdown("---")
                     
-                    # Baseline Management
+                    # Baseline Management with Multi-Baseline Support
                     st.markdown("### 🛠️ Baseline Management")
                     
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button(f"💾 Save as Baseline", key=f"save_api_{idx}"):
-                            if not admin_key:
-                                st.error("❌ Admin key required!")
-                            else:
-                                try:
-                                    save_api_baseline(
+                    # Check if multi-baseline is available
+                    if API_MULTI_BASELINE_AVAILABLE and use_multi_baseline:
+                        # Multi-baseline selection interface
+                        st.markdown("#### 🎯 Baseline Selection")
+                        baselines = list_api_baselines(result['project'])
+                        
+                        if baselines:
+                            # Dropdown to select baseline + Recompare button
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                baseline_options = ['Latest'] + [b['id'] for b in baselines]
+                                selected_baseline = st.selectbox(
+                                    "Choose correct project",
+                                    options=baseline_options,
+                                    format_func=lambda x: (
+                                        f"Latest ({baselines[0]['label']}) - {baselines[0]['failure_count']} failures" 
+                                        if x == 'Latest' 
+                                        else f"{[b for b in baselines if b['id'] == x][0]['label']} - {[b for b in baselines if b['id'] == x][0]['failure_count']} failures"
+                                    ),
+                                    key=f"api_baseline_select_{idx}"
+                                )
+                            
+                            with col2:
+                                if st.button("🔄 Recompare", key=f"api_recompare_{idx}"):
+                                    baseline_id = None if selected_baseline == 'Latest' else selected_baseline
+                                    all_failures_for_compare = result['all_failures']
+                                    
+                                    # Remove metadata-only records before comparison
+                                    real_failures = [f for f in all_failures_for_compare if not f.get("_no_failures")]
+                                    
+                                    new_f, existing_f = compare_api_baseline_multi(
                                         result['project'],
-                                        result['all_failures'],
-                                        admin_key
+                                        real_failures,
+                                        baseline_id
                                     )
-                                    st.success("✅ AutomationAPI baseline saved!")
-                                except Exception as e:
-                                    st.error(f"❌ Error: {str(e)}")
-                    
-                    with col2:
-                        if result['baseline_exists']:
-                            st.success("✅ Baseline exists")
+                                    
+                                    # Update result with new comparison
+                                    result['new_failures'] = new_f
+                                    result['existing_failures'] = existing_f
+                                    result['stats']['real_failures'] = len([f for f in new_f if not f.get('is_skipped')])
+                                    result['stats']['total_failures'] = len(new_f) + len(existing_f)
+                                    st.rerun()
+                            
+                            # Show baseline statistics
+                            stats = get_api_baseline_stats(result['project'])
+                            st.info(f"📊 {stats['count']} baseline(s) available for {result['project']}")
+                            
+                            # Display baseline details
+                            with st.expander("📋 Baseline Details", expanded=False):
+                                for i, baseline in enumerate(baselines[:5]):  # Show top 5
+                                    label_color = "🟢" if i == 0 else "🟡"
+                                    st.markdown(
+                                        f"{label_color} **{baseline['label']}** | "
+                                        f"Created: {_format_time(baseline['created_at'])} | "
+                                        f"Failures: {baseline['failure_count']}"
+                                    )
+                                
+                                if len(baselines) > 5:
+                                    st.caption(f"... and {len(baselines) - 5} more")
+                        
                         else:
-                            st.warning("⚠️ No baseline found")
+                            st.warning("⚠️ No baseline found for " + result['project'])
+                        
+                        st.markdown("---")
+                        
+                        # Save new baseline section
+                        st.markdown("#### 💾 Save New Baseline")
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            baseline_label = st.text_input(
+                                "Baseline Label (optional)",
+                                value="",
+                                placeholder="e.g., Sprint 24.1, Release 3.2",
+                                key=f"api_baseline_label_{idx}"
+                            )
+                        
+                        with col2:
+                            if st.button(f"💾 Save as Baseline", key=f"save_api_{idx}"):
+                                if not admin_key:
+                                    st.error("❌ Admin key required!")
+                                else:
+                                    try:
+                                        # Use multi-baseline save
+                                        baseline_id = save_api_baseline_multi(
+                                            result['project'],
+                                            result['all_failures'],
+                                            label=baseline_label or None
+                                        )
+                                        st.success(f"✅ Baseline saved as {baseline_id}!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Error: {str(e)}")
+                    
+                    else:
+                        # Legacy single-baseline mode (fallback)
+                        st.info("ℹ️ Enable Multi-Baseline in sidebar for advanced baseline management")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button(f"💾 Save as Baseline", key=f"save_api_{idx}"):
+                                if not admin_key:
+                                    st.error("❌ Admin key required!")
+                                else:
+                                    try:
+                                        save_api_baseline_legacy(
+                                            result['project'],
+                                            result['all_failures'],
+                                            admin_key
+                                        )
+                                        st.success("✅ AutomationAPI baseline saved!")
+                                    except Exception as e:
+                                        st.error(f"❌ Error: {str(e)}")
+                        
+                        with col2:
+                            if result['baseline_exists']:
+                                st.success("✅ Baseline exists")
+                            else:
+                                st.warning("⚠️ No baseline found")
                     
                     # Export options
                     st.markdown("### 📤 Export Options")
