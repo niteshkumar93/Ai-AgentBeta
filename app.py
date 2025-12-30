@@ -940,6 +940,156 @@ else:
                         st.metric("⏱️ Total Time", f"{result['stats']['total_time']}s")
                     
                     st.markdown("---")
+
+
+                    st.markdown("---")
+                    
+                    # ============================================================
+                    # BASELINE COMPARISON SUMMARY (NEW SECTION)
+                    # ============================================================
+                    if result['baseline_exists'] and (result['new_failures'] or result['existing_failures']):
+                        st.markdown("### 📊 Baseline Comparison Summary")
+                        
+                        # Separate new and existing failures by spec
+                        new_by_spec = {}
+                        existing_by_spec = {}
+                        
+                        for failure in result['new_failures']:
+                            spec = failure.get('spec_file', 'Unknown')
+                            if spec not in new_by_spec:
+                                new_by_spec[spec] = []
+                            new_by_spec[spec].append(failure)
+                        
+                        for failure in result['existing_failures']:
+                            spec = failure.get('spec_file', 'Unknown')
+                            if spec not in existing_by_spec:
+                                existing_by_spec[spec] = []
+                            existing_by_spec[spec].append(failure)
+                        
+                        # Get all unique specs
+                        all_specs = set(new_by_spec.keys()) | set(existing_by_spec.keys())
+                        
+                        # Categorize specs
+                        new_specs = [s for s in new_by_spec.keys() if s not in existing_by_spec]
+                        mixed_specs = [s for s in all_specs if s in new_by_spec and s in existing_by_spec]
+                        existing_only_specs = [s for s in existing_by_spec.keys() if s not in new_by_spec]
+                        
+                        # Display summary cards
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric(
+                                "🆕 New Spec Files",
+                                len(new_specs),
+                                help="Spec files that are completely new (not in baseline)"
+                            )
+                        
+                        with col2:
+                            st.metric(
+                                "📊 Specs with New Tests",
+                                len(mixed_specs),
+                                help="Spec files with mix of new and existing failures"
+                            )
+                        
+                        with col3:
+                            st.metric(
+                                "♻️ Specs with Known Failures",
+                                len(existing_only_specs),
+                                help="Spec files with only existing (baseline) failures"
+                            )
+                        
+                        st.markdown("---")
+                        
+                        # 🆕 NEW SPEC FILES (completely new)
+                        if new_specs:
+                            st.markdown("#### 🆕 New Spec Files (Not in Baseline)")
+                            st.info(f"These {len(new_specs)} spec file(s) are completely new and were not in the baseline")
+                            
+                            for spec in sorted(new_specs):
+                                failures = new_by_spec[spec]
+                                real_count = len([f for f in failures if not f.get('is_skipped')])
+                                skipped_count = len([f for f in failures if f.get('is_skipped')])
+                                
+                                with st.expander(
+                                    f"🆕 {spec} — {len(failures)} failure(s) "
+                                    f"(🔴 {real_count} real, 🟡 {skipped_count} skipped)",
+                                    expanded=False
+                                ):
+                                    for i, failure in enumerate(failures):
+                                        icon = "🟡" if failure.get('is_skipped') else "🔴"
+                                        st.markdown(
+                                            f"{icon} **{i+1}. {failure['test_name']}**  \n"
+                                            f"   Error: `{failure['error_summary']}`  \n"
+                                            f"   Time: {failure['execution_time']}s"
+                                        )
+                        
+                        # 📊 MIXED SPECS (new + existing failures)
+                        if mixed_specs:
+                            st.markdown("---")
+                            st.markdown("#### 📊 Spec Files with New Failures")
+                            st.warning(f"These {len(mixed_specs)} spec file(s) have both NEW and EXISTING failures")
+                            
+                            for spec in sorted(mixed_specs):
+                                new_failures_in_spec = new_by_spec.get(spec, [])
+                                existing_failures_in_spec = existing_by_spec.get(spec, [])
+                                
+                                new_real = len([f for f in new_failures_in_spec if not f.get('is_skipped')])
+                                new_skipped = len([f for f in new_failures_in_spec if f.get('is_skipped')])
+                                existing_count = len(existing_failures_in_spec)
+                                
+                                with st.expander(
+                                    f"📊 {spec} — 🆕 {len(new_failures_in_spec)} new | ♻️ {existing_count} existing",
+                                    expanded=False
+                                ):
+                                    # Show NEW failures
+                                    st.markdown(f"**🆕 New Failures ({len(new_failures_in_spec)}):**")
+                                    for i, failure in enumerate(new_failures_in_spec):
+                                        icon = "🟡" if failure.get('is_skipped') else "🔴"
+                                        st.markdown(
+                                            f"{icon} {i+1}. **{failure['test_name']}**  \n"
+                                            f"   Error: `{failure['error_summary']}`  \n"
+                                            f"   Time: {failure['execution_time']}s"
+                                        )
+                                    
+                                    st.markdown("---")
+                                    
+                                    # Show EXISTING failures (collapsed by default)
+                                    with st.expander(f"♻️ View {existing_count} Known Failures", expanded=False):
+                                        for i, failure in enumerate(existing_failures_in_spec):
+                                            icon = "🟡" if failure.get('is_skipped') else "🔴"
+                                            st.markdown(
+                                                f"{icon} {i+1}. {failure['test_name']}  \n"
+                                                f"   Error: `{failure['error_summary']}`"
+                                            )
+                        
+                        # ♻️ EXISTING ONLY SPECS
+                        if existing_only_specs:
+                            st.markdown("---")
+                            st.markdown("#### ♻️ Spec Files with Known Failures Only")
+                            st.success(f"These {len(existing_only_specs)} spec file(s) have no new failures (all in baseline)")
+                            
+                            with st.expander(f"View {len(existing_only_specs)} spec(s) with known failures", expanded=False):
+                                for spec in sorted(existing_only_specs):
+                                    failures = existing_by_spec[spec]
+                                    st.markdown(f"- **{spec}** — {len(failures)} known failure(s)")
+                        
+                        st.markdown("---")
+                    
+                    elif result['baseline_exists']:
+                        # Baseline exists but no failures
+                        st.success("✅ No failures detected! All tests passed.")
+                    
+                    else:
+                        # No baseline exists
+                        st.info("ℹ️ No baseline found. All failures are considered new. Save a baseline to track changes.")
+                    
+                    # ============================================================
+                    # END OF BASELINE COMPARISON SUMMARY
+                    # ============================================================
+                    
+                    st.markdown("---")
+                    
+                    # Original failures display continues below...
                     
                     # Display failures grouped by spec
                     if result['grouped_failures']:
