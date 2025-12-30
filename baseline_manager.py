@@ -40,6 +40,7 @@ KNOWN_PROJECTS = [
     "Smoke_CS_Windows",
     "DateTime",
     "Prerelease-Classic"
+    "AutomationAPI_LightningLWC"
 ]
 
 # -----------------------------------------------------------

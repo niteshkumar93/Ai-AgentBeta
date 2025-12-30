@@ -8,8 +8,7 @@ KNOWN_PROJECTS = [
 # BASELINE LIST (KNOWN PROJECTS)
 # -----------------------------------------------------------
 KNOWN_PROJECTS = [
-    "AutomationAPI_LightningLWC"
-    
+    "AutomationAPI_LightningLWC"   
 ]
 # Separate baseline directory for AutomationAPI
 BASELINE_DIR = "baselines/automation_api"
