@@ -7,7 +7,7 @@ from typing import List, Dict
 KNOWN_PROJECTS = [
     "LightningLWC",
     "Flexi5",
-    Flexi1
+    "Flexi1",
     "Flexi3",
     "ClassicAndMisc",
     "QuickActions"
