@@ -10,7 +10,7 @@ KNOWN_PROJECTS = [
     "Flexi1",
     "Flexi3",
     "ClassicAndMisc",
-    "QuickActions"
+    "QuickActions",
     "FSL3",
     "FSL2",
     "FSL1",
