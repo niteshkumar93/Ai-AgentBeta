@@ -5,6 +5,17 @@ import os
 import base64
 import requests
 from typing import List, Dict
+import streamlit as st
+
+# -----------------------------------------------------------
+# IMPORT GITHUB STORAGE (NEW)
+# -----------------------------------------------------------
+try:
+    from github_storage import GitHubStorage
+    GITHUB_STORAGE_AVAILABLE = True
+except ImportError:
+    GITHUB_STORAGE_AVAILABLE = False
+    print("⚠️ GitHub storage module not available")
 
 # -----------------------------------------------------------
 # CONFIG
@@ -42,6 +53,28 @@ KNOWN_PROJECTS = [
     "Prerelease-Classic",
     "AutomationAPI_LightningLWC"
 ]
+
+# -----------------------------------------------------------
+# GITHUB STORAGE HELPER (NEW)
+# -----------------------------------------------------------
+@st.cache_resource
+def _get_github_storage():
+    """Initialize GitHub storage from Streamlit secrets"""
+    if not GITHUB_STORAGE_AVAILABLE:
+        return None
+    
+    try:
+        token = st.secrets.get("GITHUB_TOKEN2", "")
+        owner = st.secrets.get("GITHUB_OWNER", "")
+        repo = st.secrets.get("GITHUB_REPO", "")
+        
+        if not all([token, owner, repo]):
+            return None
+        
+        return GitHubStorage(token, owner, repo, "main")
+    except Exception as e:
+        print(f"GitHub storage init failed: {e}")
+        return None
 
 # -----------------------------------------------------------
 # HELPERS
@@ -103,10 +136,14 @@ def save_baseline(project_name: str, failures: List[Dict], admin_key: str):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(failures or [], f, indent=2)
 
+    # Original GitHub commit (your existing code)
     _commit_to_github(project_name, failures or [])
+    
+    # NEW: Additional GitHub storage backup
+    _save_to_github_storage(project_name, failures or [])
 
 # -----------------------------------------------------------
-# GITHUB COMMIT (SAFE)
+# GITHUB COMMIT (SAFE) - YOUR ORIGINAL CODE
 # -----------------------------------------------------------
 def _commit_to_github(project_name: str, failures: List[Dict]):
     token = os.getenv("GITHUB_TOKEN")
@@ -138,6 +175,47 @@ def _commit_to_github(project_name: str, failures: List[Dict]):
         payload["sha"] = sha
 
     requests.put(url, headers=headers, json=payload)
+
+# -----------------------------------------------------------
+# NEW: ADDITIONAL GITHUB STORAGE BACKUP
+# -----------------------------------------------------------
+def _save_to_github_storage(project_name: str, failures: List[Dict]):
+    """
+    Additional backup to GitHub using the new storage module
+    This runs in parallel with your existing _commit_to_github()
+    """
+    github_storage = _get_github_storage()
+    
+    if not github_storage:
+        # Silently skip if not configured
+        return
+    
+    try:
+        from datetime import datetime
+        
+        # Convert to JSON string
+        json_content = json.dumps(failures or [], indent=2)
+        
+        # Create filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{project_name}_baseline_{timestamp}.json"
+        
+        # Save to GitHub (in a separate folder to avoid conflicts)
+        success = github_storage.save_baseline(
+            json_content, 
+            filename, 
+            folder="baselines_backup/provar"
+        )
+        
+        if success:
+            st.success(f"✅ Backup saved to GitHub: {filename}")
+            print(f"✅ GitHub storage backup saved: {filename}")
+        else:
+            print(f"⚠️ GitHub storage backup failed for {filename}")
+    
+    except Exception as e:
+        # Don't fail if backup fails - original save still works
+        print(f"⚠️ GitHub storage backup error: {e}")
 
 # -----------------------------------------------------------
 # COMPARE
@@ -242,3 +320,53 @@ def rollback_baseline(project_name: str, commit_sha: str, admin_key: str):
     }
 
     requests.put(repo_url, headers=headers, json=payload)
+
+# -----------------------------------------------------------
+# NEW: LIST GITHUB STORAGE BACKUPS
+# -----------------------------------------------------------
+def list_github_baselines(project_name: str = None) -> List[Dict]:
+    """
+    List all baseline backups from GitHub storage
+    (separate from your original GitHub repo baselines)
+    """
+    github_storage = _get_github_storage()
+    
+    if not github_storage:
+        return []
+    
+    try:
+        all_baselines = github_storage.list_baselines(folder="baselines_backup/provar")
+        
+        if project_name:
+            # Filter by project name
+            return [b for b in all_baselines if b['name'].startswith(project_name)]
+        
+        return all_baselines
+    
+    except Exception as e:
+        print(f"Error listing GitHub baselines: {e}")
+        return []
+
+# -----------------------------------------------------------
+# NEW: LOAD GITHUB STORAGE BACKUP
+# -----------------------------------------------------------
+def load_github_baseline(filename: str) -> List[Dict]:
+    """
+    Load a specific baseline backup from GitHub storage
+    """
+    github_storage = _get_github_storage()
+    
+    if not github_storage:
+        return []
+    
+    try:
+        content = github_storage.load_baseline(filename, folder="baselines_backup/provar")
+        
+        if content:
+            return json.loads(content)
+        
+        return []
+    
+    except Exception as e:
+        print(f"Error loading GitHub baseline: {e}")
+        return []
