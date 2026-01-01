@@ -87,13 +87,7 @@ def format_execution_time(raw_time: str):
     """Format timestamp from XML to readable format"""
     if raw_time in (None, "", "Unknown"):
         return "Unknown"
-def _format_time(ts: str):
-    """Format timestamp string to readable format"""
-    try:
-        dt = datetime.strptime(ts, "%Y%m%d_%H%M%S")
-        return dt.strftime("%d %b %Y, %H:%M")
-    except Exception:
-        return ts
+    
     # Try different datetime formats
     formats_to_try = [
         "%Y-%m-%dT%H:%M:%S",           # ISO format: 2025-01-15T14:30:00
@@ -114,6 +108,14 @@ def _format_time(ts: str):
     
     # If no format matches, return as-is
     return raw_time
+
+def _format_time(ts: str):
+    """Format timestamp string to readable format"""
+    try:
+        dt = datetime.strptime(ts, "%Y%m%d_%H%M%S")
+        return dt.strftime("%d %b %Y, %H:%M")
+    except Exception:
+        return ts
 
 # -----------------------------------------------------------
 # IMPORT PROVAR MODULES (EXISTING)
@@ -149,7 +151,7 @@ from automation_api_baseline_manager import (
 # -----------------------------------------------------------
 # CONSTANTS
 # -----------------------------------------------------------
-APP_VERSION = "3.1.0"  # Updated version with multi-baseline support
+APP_VERSION = "3.2.0"  # Updated version with baseline management UI
 
 # -----------------------------------------------------------
 # PROVAR HELPER FUNCTIONS (EXISTING)
@@ -307,12 +309,107 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("🔄 Baseline Sync")
 
-    if st.button("🔄Sync Baselines from GitHub"):
+    if st.button("🔄 Sync Baselines from GitHub"):
         with st.spinner("Syncing baselines from GitHub..."):
             synced = baseline_service.sync_from_github()
         st.success(f"✅ {synced} baseline(s) synced from GitHub")
         st.rerun()
 
+    # -----------------------------------------------------------
+    # NEW: BASELINE MANAGEMENT SECTION
+    # -----------------------------------------------------------
+    st.markdown("---")
+    st.subheader("📋 Manage Saved Baselines")
+    
+    # Dropdown to select platform
+    platform_filter = st.selectbox(
+        "Filter by Platform:",
+        options=["All", "Provar", "AutomationAPI"],
+        index=0,
+        key="platform_filter"
+    )
+    
+    # Load baselines from GitHub
+    if st.button("🔍 Show Baselines", key="show_baselines_btn"):
+        try:
+            # Get all baselines from GitHub
+            all_files = github.list_baselines()
+            
+            if all_files:
+                # Filter by platform if needed
+                if platform_filter == "Provar":
+                    filtered = [f for f in all_files if "_provar_" in f['name'].lower()]
+                elif platform_filter == "AutomationAPI":
+                    filtered = [f for f in all_files if "_automation_api_" in f['name'].lower()]
+                else:
+                    filtered = all_files
+                
+                st.session_state['baseline_list'] = filtered
+                st.success(f"✅ Found {len(filtered)} baseline(s)")
+            else:
+                st.info("No baselines found in GitHub")
+                st.session_state['baseline_list'] = []
+        
+        except Exception as e:
+            st.error(f"Error loading baselines: {str(e)}")
+            st.session_state['baseline_list'] = []
+    
+    # Display baselines if they exist in session state
+    if 'baseline_list' in st.session_state and st.session_state['baseline_list']:
+        st.write(f"**{len(st.session_state['baseline_list'])} baseline(s) available:**")
+        
+        for idx, baseline in enumerate(st.session_state['baseline_list']):
+            with st.expander(f"📄 {baseline['name']}", expanded=False):
+                st.caption(f"Size: {baseline.get('size', 'Unknown')} bytes")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("📥 Load", key=f"load_baseline_{idx}"):
+                        try:
+                            content = github.load_baseline(baseline['name'])
+                            if content:
+                                st.session_state['loaded_baseline'] = content
+                                st.session_state['loaded_baseline_name'] = baseline['name']
+                                st.success("✅ Baseline loaded!")
+                                st.rerun()
+                            else:
+                                st.error("Failed to load baseline")
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                
+                with col2:
+                    if st.button("🗑️ Delete", key=f"delete_baseline_{idx}"):
+                        # Get admin_key from session state or show error
+                        admin_key = st.session_state.get('admin_key_input', '')
+                        if admin_key:
+                            try:
+                                if github.delete_baseline(baseline['name']):
+                                    st.success("✅ Deleted!")
+                                    # Remove from session state
+                                    st.session_state['baseline_list'].remove(baseline)
+                                    st.rerun()
+                                else:
+                                    st.error("Delete failed")
+                            except Exception as e:
+                                st.error(f"Error: {str(e)}")
+                        else:
+                            st.error("🔒 Admin key required for deletion")
+    
+    # Show loaded baseline info if exists
+    if 'loaded_baseline_name' in st.session_state:
+        st.markdown("---")
+        st.success(f"📂 Loaded: **{st.session_state['loaded_baseline_name']}**")
+        if st.button("🗑️ Clear Loaded", key="clear_loaded"):
+            del st.session_state['loaded_baseline']
+            del st.session_state['loaded_baseline_name']
+            st.rerun()
+    
+    # -----------------------------------------------------------
+    # END OF NEW BASELINE MANAGEMENT SECTION
+    # -----------------------------------------------------------
+
+    st.markdown("---")
     st.header("⚙️ Configuration")
     
     # NEW: Radio button for report type selection
@@ -336,7 +433,7 @@ with st.sidebar:
         enable_jira_generation = st.checkbox("Jira Ticket Generation", value=True, help="Auto-generate Jira tickets")
         enable_test_improvements = st.checkbox("Test Improvement Suggestions", value=False, help="Get suggestions to improve test stability")
     
-    admin_key = st.text_input("🔐 Admin Key", type="password", help="Required for saving baselines")
+    admin_key = st.text_input("🔐 Admin Key", type="password", help="Required for saving baselines", key="admin_key_input")
     
     # Multi-baseline toggle (only show if available)
     if MULTI_BASELINE_AVAILABLE:
@@ -384,6 +481,38 @@ with st.sidebar:
         st.info("ℹ️ OpenAI (Paid)")
     else:
         st.warning("⚠️ No AI configured")
+
+# -----------------------------------------------------------
+# MAIN CONTENT AREA - ADD LOADED BASELINE DISPLAY
+# -----------------------------------------------------------
+
+# OPTIONAL: Display loaded baseline in main area
+if 'loaded_baseline' in st.session_state:
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown("## 📂 Loaded Baseline Details")
+    
+    st.info(f"📄 Currently viewing: **{st.session_state.get('loaded_baseline_name', 'Unknown')}**")
+    
+    with st.expander("👁️ View Baseline Content", expanded=False):
+        st.code(st.session_state['loaded_baseline'], language='json')
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            "📥 Download Baseline",
+            st.session_state['loaded_baseline'],
+            file_name=st.session_state.get('loaded_baseline_name', 'baseline.json'),
+            mime='application/json',
+            key="download_baseline_main"
+        )
+    
+    with col2:
+        if st.button("🗑️ Clear Loaded Baseline", key="clear_main"):
+            del st.session_state['loaded_baseline']
+            del st.session_state['loaded_baseline_name']
+            st.rerun()
+    
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
 # -----------------------------------------------------------
 # MAIN CONTENT AREA
@@ -612,7 +741,7 @@ elif report_type == "Provar Regression Reports":
                             st.warning(f"⚠️ No baseline found for {result['project']}")
                         
                         st.markdown("---")
-                    
+
                     # Tabs for different failure types
                     tab1, tab2, tab3 = st.tabs(["🆕 New Failures", "♻️ Existing Failures", "⚙️ Actions"])
                     
