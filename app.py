@@ -315,7 +315,81 @@ with st.sidebar:
         st.success(f"✅ {synced} baseline(s) synced from GitHub")
         st.rerun()
 
-    # -----------------------------------------------------------
+   
+
+    st.markdown("---")
+    st.header("⚙️ Configuration")
+    
+    # NEW: Radio button for report type selection
+    st.subheader("📊 Report Type")
+    report_type = st.radio(
+        "Select Report Type:",
+        options=["Provar Regression Reports", "AutomationAPI Reports", "📈 Baseline Tracker"],
+        index=0,
+        help="Choose the type of XML report you want to analyze"
+    )
+    
+    st.markdown("---")
+    
+    # AI Settings
+    st.subheader("🤖 AI Features")
+    use_ai = st.checkbox("Enable AI Analysis", value=False, help="Use Groq AI for intelligent failure analysis")
+    
+    # Advanced AI Features
+    with st.expander("🎯 Advanced AI Features"):
+        enable_batch_analysis = st.checkbox("Batch Pattern Analysis", value=True, help="Find common patterns across failures")
+        enable_jira_generation = st.checkbox("Jira Ticket Generation", value=True, help="Auto-generate Jira tickets")
+        enable_test_improvements = st.checkbox("Test Improvement Suggestions", value=False, help="Get suggestions to improve test stability")
+    
+    admin_key = st.text_input("🔐 Admin Key", type="password", help="Required for saving baselines", key="admin_key_input")
+    
+    # Multi-baseline toggle (only show if available)
+    if MULTI_BASELINE_AVAILABLE:
+        st.markdown("---")
+        st.subheader("🆕 Multi-Baseline")
+        use_multi_baseline = st.checkbox(
+            "Enable Multi-Baseline (NEW)",
+            value=True,
+            help="Store up to 10 baselines per project (recommended)"
+        )
+    else:
+        use_multi_baseline = False
+    
+    st.markdown("---")
+    
+    # Version info
+    st.caption(f"Version: {APP_VERSION}")
+    if MULTI_BASELINE_AVAILABLE and use_multi_baseline:
+        st.success("✅ Multi-Baseline Active")
+    
+    # Reset Button
+    if st.button("🔄 Reset All", type="secondary", use_container_width=True, help="Clear all data and start fresh"):
+        # Clear session state
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.success("✅ UI Reset! Ready for new uploads.")
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### 📊 Upload Statistics")
+    if 'upload_stats' in st.session_state:
+        st.info(f"**Files Uploaded:** {st.session_state.upload_stats.get('count', 0)}")
+        st.info(f"**Total Failures:** {st.session_state.upload_stats.get('total_failures', 0)}")
+        st.info(f"**New Failures:** {st.session_state.upload_stats.get('new_failures', 0)}")
+    
+    # AI Status
+    st.markdown("---")
+    st.markdown("### 🤖 AI Status")
+    groq_key = os.getenv("GROQ_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    
+    if groq_key:
+        st.success("✅ Groq AI (Free)")
+    elif openai_key:
+        st.info("ℹ️ OpenAI (Paid)")
+    else:
+        st.warning("⚠️ No AI configured")
+ # -----------------------------------------------------------
     # NEW: BASELINE MANAGEMENT SECTION
     # -----------------------------------------------------------
     st.markdown("---")
@@ -408,80 +482,6 @@ with st.sidebar:
     # -----------------------------------------------------------
     # END OF NEW BASELINE MANAGEMENT SECTION
     # -----------------------------------------------------------
-
-    st.markdown("---")
-    st.header("⚙️ Configuration")
-    
-    # NEW: Radio button for report type selection
-    st.subheader("📊 Report Type")
-    report_type = st.radio(
-        "Select Report Type:",
-        options=["Provar Regression Reports", "AutomationAPI Reports", "📈 Baseline Tracker"],
-        index=0,
-        help="Choose the type of XML report you want to analyze"
-    )
-    
-    st.markdown("---")
-    
-    # AI Settings
-    st.subheader("🤖 AI Features")
-    use_ai = st.checkbox("Enable AI Analysis", value=False, help="Use Groq AI for intelligent failure analysis")
-    
-    # Advanced AI Features
-    with st.expander("🎯 Advanced AI Features"):
-        enable_batch_analysis = st.checkbox("Batch Pattern Analysis", value=True, help="Find common patterns across failures")
-        enable_jira_generation = st.checkbox("Jira Ticket Generation", value=True, help="Auto-generate Jira tickets")
-        enable_test_improvements = st.checkbox("Test Improvement Suggestions", value=False, help="Get suggestions to improve test stability")
-    
-    admin_key = st.text_input("🔐 Admin Key", type="password", help="Required for saving baselines", key="admin_key_input")
-    
-    # Multi-baseline toggle (only show if available)
-    if MULTI_BASELINE_AVAILABLE:
-        st.markdown("---")
-        st.subheader("🆕 Multi-Baseline")
-        use_multi_baseline = st.checkbox(
-            "Enable Multi-Baseline (NEW)",
-            value=True,
-            help="Store up to 10 baselines per project (recommended)"
-        )
-    else:
-        use_multi_baseline = False
-    
-    st.markdown("---")
-    
-    # Version info
-    st.caption(f"Version: {APP_VERSION}")
-    if MULTI_BASELINE_AVAILABLE and use_multi_baseline:
-        st.success("✅ Multi-Baseline Active")
-    
-    # Reset Button
-    if st.button("🔄 Reset All", type="secondary", use_container_width=True, help="Clear all data and start fresh"):
-        # Clear session state
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.success("✅ UI Reset! Ready for new uploads.")
-        st.rerun()
-    
-    st.markdown("---")
-    st.markdown("### 📊 Upload Statistics")
-    if 'upload_stats' in st.session_state:
-        st.info(f"**Files Uploaded:** {st.session_state.upload_stats.get('count', 0)}")
-        st.info(f"**Total Failures:** {st.session_state.upload_stats.get('total_failures', 0)}")
-        st.info(f"**New Failures:** {st.session_state.upload_stats.get('new_failures', 0)}")
-    
-    # AI Status
-    st.markdown("---")
-    st.markdown("### 🤖 AI Status")
-    groq_key = os.getenv("GROQ_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
-    
-    if groq_key:
-        st.success("✅ Groq AI (Free)")
-    elif openai_key:
-        st.info("ℹ️ OpenAI (Paid)")
-    else:
-        st.warning("⚠️ No AI configured")
-
 # -----------------------------------------------------------
 # MAIN CONTENT AREA - ADD LOADED BASELINE DISPLAY
 # -----------------------------------------------------------
