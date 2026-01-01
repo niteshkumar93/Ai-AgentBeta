@@ -7,6 +7,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from github_storage import GitHubStorage
 import os
+from storage.baseline_service import BaselineService
+from github_storage import GitHubStorage
 
 # ============================================================
 # CONFIGURATION - UPDATE THESE VALUES

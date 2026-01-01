@@ -7,6 +7,17 @@ import io
 import os
 from datetime import datetime
 
+from storage.baseline_service import BaselineService
+from github_storage import GitHubStorage
+github = GitHubStorage(
+    token=st.secrets.get("GITHUB_TOKEN2"),
+    repo_owner=st.secrets.get("GITHUB_OWNER"),
+    repo_name=st.secrets.get("GITHUB_REPO")
+)
+
+baseline_service = BaselineService(github)
+
+
 # -----------------------------------------------------------
 # IMPORT MULTI-BASELINE ENGINE (NEW - OPTIONAL)
 # -----------------------------------------------------------
@@ -721,7 +732,12 @@ elif report_type == "Provar Regression Reports":
                                             if selected_project == "UNKNOWN_PROJECT":
                                                 st.error("Please select a project before saving baseline.")
                                             else:
-                                                save_baseline(selected_project, all_failures, admin_key)
+                                                baseline_service.save(
+                                                    project=selected_project,
+                                                    platform="provar",
+                                                    failures=all_failures,
+                                                    label=baseline_label if baseline_label else None
+                                                    )
                                                 st.success("✅ Provar baseline saved successfully!")
                                         except Exception as e:
                                             st.error(f"❌ Error: {str(e)}")
@@ -1263,10 +1279,11 @@ else:
                                 else:
                                     try:
                                         # Use multi-baseline save
-                                        baseline_id = save_api_baseline_multi(
-                                            result['project'],
-                                            result['all_failures'],
-                                            label=baseline_label or None
+                                        baseline_id = baseline_service.save(
+                                        project=result['project'],
+                                        platform="automation_api",
+                                        failures=result['all_failures'],
+                                        label=baseline_label or None
                                         )
                                         st.success(f"✅ Baseline saved as {baseline_id}!")
                                         st.rerun()
@@ -1284,11 +1301,12 @@ else:
                                     st.error("❌ Admin key required!")
                                 else:
                                     try:
-                                        save_api_baseline_legacy(
-                                            result['project'],
-                                            result['all_failures'],
-                                            admin_key
-                                        )
+                                        baseline_service.save(
+                                            project=result['project'],
+                                            platform="automation_api",
+                                            failures=result['all_failures'],
+                                            label=None
+                                            )
                                         st.success("✅ AutomationAPI baseline saved!")
                                     except Exception as e:
                                         st.error(f"❌ Error: {str(e)}")
