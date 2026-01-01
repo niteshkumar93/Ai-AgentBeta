@@ -72,7 +72,7 @@ def _get_github_storage():
         
         # Validate all required fields
         if not token:
-            print("❌ GITHUB_TOKEN2 not found in secrets")
+            print("❌ GITHUB_TOKEN not found in secrets")
             return None
         
         if not owner:
@@ -104,7 +104,7 @@ def _validate_github_config():
             1. Go to: ⚙️ Settings → Secrets
             2. Add:
             ```toml
-            GITHUB_TOKEN2 = "ghp_your_token_here"
+            GITHUB_TOKEN = "ghp_your_token_here"
             GITHUB_OWNER = "niteshkumar93"
             GITHUB_REPO = "streamlit-baselines"
             ```
@@ -198,7 +198,7 @@ def save_baseline(project_name: str, failures: List[Dict], admin_key: str):
 # -----------------------------------------------------------
 def _commit_to_github(project_name: str, failures: List[Dict]):
     """Original GitHub commit method - commits to baselines/ folder"""
-    token = os.getenv("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN2", "")
+    token = os.getenv("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
     
     if not token:
         print("⚠️ No GitHub token found for direct commit")
@@ -312,7 +312,7 @@ def compare_with_baseline(project_name: str, current_failures: List[Dict]):
 # -----------------------------------------------------------
 def get_baseline_history(project_name: str):
     """Get commit history for a baseline from GitHub"""
-    token = os.getenv("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN2", "")
+    token = os.getenv("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
     
     if not token:
         return []
@@ -338,7 +338,7 @@ def rollback_baseline(project_name: str, commit_sha: str, admin_key: str):
     if admin_key != ADMIN_KEY:
         raise PermissionError("❌ Invalid admin key")
 
-    token = os.getenv("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN2", "")
+    token = os.getenv("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
     
     if not token:
         raise RuntimeError("❌ GITHUB_TOKEN not found")

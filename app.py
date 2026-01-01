@@ -10,7 +10,7 @@ from datetime import datetime
 from storage.baseline_service import BaselineService
 from github_storage import GitHubStorage
 github = GitHubStorage(
-    token=st.secrets.get("GITHUB_TOKEN2"),
+    token=st.secrets.get("GITHUB_TOKEN"),
     repo_owner=st.secrets.get("GITHUB_OWNER"),
     repo_name=st.secrets.get("GITHUB_REPO")
 )
@@ -305,7 +305,33 @@ st.markdown('<div class="main-header">🤖 Provar AI - Multi-Platform Report Ana
 # SIDEBAR CONFIGURATION
 # -----------------------------------------------------------
 with st.sidebar:
+    st.markdown("---")
+    st.markdown("### 🔍 GitHub Connection Status")
     
+    try:
+        # Test GitHub connection
+        test_list = github.list_baselines()
+        st.success(f"✅ GitHub Connected")
+        st.caption(f"Found {len(test_list)} baseline(s)")
+    except Exception as e:
+        st.error("❌ GitHub Connection Failed")
+        st.code(str(e))
+        
+        # Show which secrets are missing
+        if st.secrets.get("GITHUB_TOKEN"):
+            st.info("✅ GITHUB_TOKEN found")
+        else:
+            st.error("❌ GITHUB_TOKEN missing")
+            
+        if st.secrets.get("GITHUB_OWNER"):
+            st.info(f"✅ Owner: {st.secrets.get('GITHUB_OWNER')}")
+        else:
+            st.error("❌ GITHUB_OWNER missing")
+            
+        if st.secrets.get("GITHUB_REPO"):
+            st.info(f"✅ Repo: {st.secrets.get('GITHUB_REPO')}")
+        else:
+            st.error("❌ GITHUB_REPO missing")
     st.markdown("---")
     st.subheader("🔄 Baseline Sync")
 
@@ -861,11 +887,12 @@ elif report_type == "Provar Regression Reports":
                                                 if selected_project == "UNKNOWN_PROJECT":
                                                     st.error("Please select a project before saving baseline.")
                                                 else:
-                                                    baseline_id = save_multi_baseline(
-                                                        selected_project,
-                                                        all_failures,
-                                                        baseline_label
-                                                    )
+                                                    baseline_id = baseline_service.save(
+                                                        project=selected_project,
+                                                        platform="provar",
+                                                        failures=all_failures,
+                                                        label=baseline_label if baseline_label else None
+                                                        )
                                                     st.success(f"✅ Multi-baseline saved! ID: {baseline_id}")
                                                     baselines = list_baselines(selected_project)
                                                     st.info(f"📊 This project now has {len(baselines)} baseline(s)")
@@ -1438,10 +1465,12 @@ else:
                                         failures=result['all_failures'],
                                         label=baseline_label or None
                                         )
-                                        st.success(f"✅ Baseline saved as {baseline_id}!")
+                                        st.success(f"✅ Baseline saved to GitHub as {baseline_id}!")
                                         st.rerun()
                                     except Exception as e:
                                         st.error(f"❌ Error: {str(e)}")
+                                        import traceback
+                                        st.code(traceback.format_exc())  # Shows detailed error
                     
                     else:
                         # Legacy single-baseline mode (fallback)

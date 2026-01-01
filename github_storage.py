@@ -1,6 +1,6 @@
 """
-GitHub Storage Module for Streamlit App
-Automatically saves and loads XML baseline files to/from GitHub
+GitHub Storage Module - FIXED VERSION
+Supports both XML and JSON baseline files
 """
 
 import requests
@@ -8,7 +8,6 @@ import base64
 import json
 from datetime import datetime
 from typing import Optional, List, Dict
-import xml.etree.ElementTree as ET
 
 
 class GitHubStorage:
@@ -31,14 +30,29 @@ class GitHubStorage:
             "Authorization": f"token {token}",
             "Accept": "application/vnd.github.v3+json"
         }
+        
+        # Validate configuration
+        if not token:
+            raise ValueError("❌ GitHub token is required")
+        if not repo_owner:
+            raise ValueError("❌ GitHub repo_owner is required")
+        if not repo_name:
+            raise ValueError("❌ GitHub repo_name is required")
+        
+        print(f"✅ GitHubStorage initialized: {repo_owner}/{repo_name}")
     
-    def save_baseline(self, xml_content: str, filename: str, folder: str = "baselines") -> bool:
+    def save_baseline(
+        self, 
+        content: str,  # Can be XML or JSON string
+        filename: str, 
+        folder: str = "baselines"
+    ) -> bool:
         """
-        Save XML baseline to GitHub automatically
+        Save baseline file to GitHub (supports XML and JSON)
         
         Args:
-            xml_content: XML content as string
-            filename: Name of the file (e.g., 'baseline_2024.xml')
+            content: File content as string (XML or JSON)
+            filename: Name of the file (e.g., 'project_baseline_20240115.json')
             folder: Folder path in repo (default: 'baselines')
         
         Returns:
@@ -49,8 +63,10 @@ class GitHubStorage:
             file_path = f"{folder}/{filename}" if folder else filename
             url = f"{self.base_url}/{file_path}"
             
+            print(f"📤 Attempting to save: {file_path}")
+            
             # Encode content to base64
-            content_bytes = xml_content.encode('utf-8')
+            content_bytes = content.encode('utf-8')
             content_base64 = base64.b64encode(content_bytes).decode('utf-8')
             
             # Check if file already exists (to get SHA for update)
@@ -69,6 +85,9 @@ class GitHubStorage:
             # Add SHA if file exists (for update)
             if sha:
                 data["sha"] = sha
+                print(f"📝 Updating existing file (SHA: {sha[:8]}...)")
+            else:
+                print(f"📄 Creating new file")
             
             # Make request
             response = requests.put(url, headers=self.headers, json=data)
@@ -77,28 +96,45 @@ class GitHubStorage:
                 print(f"✅ Baseline saved successfully: {filename}")
                 return True
             else:
-                print(f"❌ Error saving baseline: {response.status_code}")
+                print(f"❌ Error saving baseline: HTTP {response.status_code}")
                 print(f"Response: {response.text}")
+                
+                # Check for common errors
+                if response.status_code == 401:
+                    print("❌ Authentication failed - check your GITHUB_TOKEN")
+                elif response.status_code == 404:
+                    print(f"❌ Repository not found: {self.repo_owner}/{self.repo_name}")
+                elif response.status_code == 403:
+                    print("❌ Permission denied - check token permissions")
+                
                 return False
                 
         except Exception as e:
             print(f"❌ Exception while saving baseline: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return False
     
-    def load_baseline(self, filename: str, folder: str = "baselines") -> Optional[str]:
+    def load_baseline(
+        self, 
+        filename: str, 
+        folder: str = "baselines"
+    ) -> Optional[str]:
         """
-        Load XML baseline from GitHub
+        Load baseline file from GitHub (supports XML and JSON)
         
         Args:
             filename: Name of the file to load
             folder: Folder path in repo (default: 'baselines')
         
         Returns:
-            XML content as string, or None if not found
+            File content as string, or None if not found
         """
         try:
             file_path = f"{folder}/{filename}" if folder else filename
             url = f"{self.base_url}/{file_path}"
+            
+            print(f"📥 Loading baseline: {file_path}")
             
             response = requests.get(url, headers=self.headers)
             
@@ -109,7 +145,7 @@ class GitHubStorage:
                 print(f"✅ Baseline loaded successfully: {filename}")
                 return content
             else:
-                print(f"⚠️ Baseline not found: {filename}")
+                print(f"⚠️ Baseline not found: {filename} (HTTP {response.status_code})")
                 return None
                 
         except Exception as e:
@@ -118,7 +154,7 @@ class GitHubStorage:
     
     def list_baselines(self, folder: str = "baselines") -> List[Dict[str, str]]:
         """
-        List all baseline files in the repository
+        List all baseline files in the repository (XML and JSON)
         
         Args:
             folder: Folder path in repo (default: 'baselines')
@@ -128,6 +164,9 @@ class GitHubStorage:
         """
         try:
             url = f"{self.base_url}/{folder}"
+            
+            print(f"📋 Listing baselines in: {folder}")
+            
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -135,7 +174,11 @@ class GitHubStorage:
                 baseline_files = []
                 
                 for file in files:
-                    if file['type'] == 'file' and file['name'].endswith('.xml'):
+                    # Accept both .xml and .json files
+                    if file['type'] == 'file' and (
+                        file['name'].endswith('.xml') or 
+                        file['name'].endswith('.json')
+                    ):
                         baseline_files.append({
                             'name': file['name'],
                             'size': file['size'],
@@ -143,16 +186,28 @@ class GitHubStorage:
                             'download_url': file['download_url']
                         })
                 
+                print(f"✅ Found {len(baseline_files)} baseline(s)")
                 return baseline_files
+            
+            elif response.status_code == 404:
+                # Folder doesn't exist yet - this is OK
+                print(f"ℹ️ Folder '{folder}' doesn't exist yet (will be created on first save)")
+                return []
+            
             else:
-                print(f"⚠️ Could not list baselines: {response.status_code}")
+                print(f"⚠️ Could not list baselines: HTTP {response.status_code}")
+                print(f"Response: {response.text}")
                 return []
                 
         except Exception as e:
             print(f"❌ Exception while listing baselines: {str(e)}")
             return []
     
-    def delete_baseline(self, filename: str, folder: str = "baselines") -> bool:
+    def delete_baseline(
+        self, 
+        filename: str, 
+        folder: str = "baselines"
+    ) -> bool:
         """
         Delete a baseline file from GitHub
         
@@ -166,6 +221,8 @@ class GitHubStorage:
         try:
             file_path = f"{folder}/{filename}" if folder else filename
             url = f"{self.base_url}/{file_path}"
+            
+            print(f"🗑️ Deleting baseline: {file_path}")
             
             # Get SHA (required for deletion)
             sha = self._get_file_sha(file_path)
@@ -187,7 +244,7 @@ class GitHubStorage:
                 print(f"✅ Baseline deleted successfully: {filename}")
                 return True
             else:
-                print(f"❌ Error deleting baseline: {response.status_code}")
+                print(f"❌ Error deleting baseline: HTTP {response.status_code}")
                 return False
                 
         except Exception as e:
@@ -213,31 +270,27 @@ class GitHubStorage:
             else:
                 return None
                 
-        except Exception as e:
+        except Exception:
             return None
-
-
-def xml_to_string(xml_element) -> str:
-    """
-    Convert XML element to string
     
-    Args:
-        xml_element: XML Element object
-    
-    Returns:
-        XML as string
-    """
-    return ET.tostring(xml_element, encoding='unicode', method='xml')
-
-
-def string_to_xml(xml_string: str):
-    """
-    Convert string to XML element
-    
-    Args:
-        xml_string: XML as string
-    
-    Returns:
-        XML Element object
-    """
-    return ET.fromstring(xml_string)
+    def test_connection(self) -> bool:
+        """
+        Test if GitHub connection is working
+        
+        Returns:
+            True if connection is OK
+        """
+        try:
+            # Try to list root contents
+            response = requests.get(self.base_url, headers=self.headers)
+            
+            if response.status_code == 200:
+                print(f"✅ GitHub connection test passed")
+                return True
+            else:
+                print(f"❌ GitHub connection test failed: HTTP {response.status_code}")
+                return False
+        
+        except Exception as e:
+            print(f"❌ GitHub connection test error: {e}")
+            return False
