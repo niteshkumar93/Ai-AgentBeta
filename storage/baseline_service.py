@@ -13,6 +13,55 @@ except ImportError:
 
 
 class BaselineService:
+    # --------------------------------------------------
+    # SYNC BASELINES FROM GITHUB → SQLITE
+    # --------------------------------------------------
+    def sync_from_github(self) -> int:
+        """
+        Pull baselines from GitHub and store them in SQLite
+        so other machines can see the same baselines.
+        """
+        if not self.github:
+            return 0
+
+        imported = 0
+        baselines = self.github.list_baselines(folder="baselines_backup/sqlite")
+
+        for b in baselines:
+            content = self.github.load_baseline(
+                b["name"],
+                folder="baselines_backup/sqlite"
+            )
+            if not content:
+                continue
+
+            try:
+                data = json.loads(content)
+
+                # Filename format:
+                # project_platform_id.json
+                name = b["name"].replace(".json", "")
+                parts = name.split("_", 2)
+
+                if len(parts) < 2:
+                    continue
+
+                project = parts[0]
+                platform = parts[1]
+
+                self.save(
+                    project=project,
+                    platform=platform,
+                    failures=data,
+                    label="Synced from GitHub"
+                )
+                imported += 1
+
+            except Exception as e:
+                print(f"Sync failed for {b['name']}: {e}")
+                continue
+
+        return imported
 
     def __init__(self, github_storage: GitHubStorage | None = None):
         self.github = github_storage

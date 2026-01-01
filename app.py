@@ -239,6 +239,20 @@ def render_comparison_chart(all_results):
 # PAGE CONFIGURATION
 # -----------------------------------------------------------
 st.set_page_config("Provar AI - Multi-Platform XML Analyzer", layout="wide", page_icon="🚀")
+# -----------------------------------------------------------
+# STEP-3: AUTO SYNC BASELINES FROM GITHUB (ONCE PER SESSION)
+# -----------------------------------------------------------
+if "baselines_synced" not in st.session_state:
+    try:
+        synced = baseline_service.sync_from_github()
+        st.session_state.baselines_synced = True
+
+        if synced > 0:
+            st.toast(f"🔄 {synced} baseline(s) synced from GitHub", icon="✅")
+    except Exception as e:
+        # Do NOT block app startup if sync fails
+        print(f"Auto-sync skipped: {e}")
+# -----------------------------------------------------------
 
 # Custom CSS
 st.markdown("""
@@ -289,6 +303,16 @@ st.markdown('<div class="main-header">🤖 Provar AI - Multi-Platform Report Ana
 # SIDEBAR CONFIGURATION
 # -----------------------------------------------------------
 with st.sidebar:
+    
+    st.markdown("---")
+    st.subheader("🔄 Baseline Sync")
+
+    if st.button("🔄Sync Baselines from GitHub"):
+        with st.spinner("Syncing baselines from GitHub..."):
+            synced = baseline_service.sync_from_github()
+        st.success(f"✅ {synced} baseline(s) synced from GitHub")
+        st.rerun()
+
     st.header("⚙️ Configuration")
     
     # NEW: Radio button for report type selection
