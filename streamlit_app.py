@@ -13,9 +13,9 @@ import os
 # ============================================================
 
 # GitHub Configuration
-GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN2", "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")  # Will use Streamlit secrets
-GITHUB_OWNER = st.secrets.get("GITHUB_OWNER", "niteshkumar93")  # Your GitHub username
-GITHUB_REPO = st.secrets.get("GITHUB_REPO", "streamlit-baselines")    # Your repository name
+GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN2", "")  # Will use Streamlit secrets
+GITHUB_OWNER = st.secrets.get("GITHUB_OWNER", "")  # Your GitHub username
+GITHUB_REPO = st.secrets.get("GITHUB_REPO", "")    # Your repository name
 GITHUB_BRANCH = "main"  # Branch name
 
 # ============================================================
