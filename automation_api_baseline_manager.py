@@ -59,7 +59,7 @@ def _get_github_storage():
         return None
     
     try:
-        token = st.secrets.get("GITHUB_TOKEN2", "")
+        token = st.secrets.get("GITHUB_TOKEN", "")
         owner = st.secrets.get("GITHUB_OWNER", "")
         repo = st.secrets.get("GITHUB_REPO", "")
         
