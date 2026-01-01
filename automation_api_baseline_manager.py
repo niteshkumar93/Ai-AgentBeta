@@ -4,7 +4,7 @@ from typing import List, Dict
 import streamlit as st
 
 # -----------------------------------------------------------
-# IMPORT GITHUB STORAGE (NEW)
+# IMPORT GITHUB STORAGE
 # -----------------------------------------------------------
 try:
     from github_storage import GitHubStorage
@@ -50,7 +50,7 @@ BASELINE_DIR = "baselines/automation_api"
 os.makedirs(BASELINE_DIR, exist_ok=True)
 
 # -----------------------------------------------------------
-# GITHUB STORAGE HELPER (NEW)
+# GITHUB STORAGE HELPER - SAME AS PROVAR
 # -----------------------------------------------------------
 @st.cache_resource
 def _get_github_storage():
@@ -64,12 +64,15 @@ def _get_github_storage():
         repo = st.secrets.get("GITHUB_REPO", "")
         
         if not all([token, owner, repo]):
+            print("⚠️ GitHub storage: Missing configuration")
             return None
         
+        print(f"✅ API GitHub storage initialized: {owner}/{repo}")
         return GitHubStorage(token, owner, repo, "main")
     except Exception as e:
         print(f"GitHub storage init failed: {e}")
         return None
+
 
 def _get_baseline_path(project_name: str) -> str:
     """Get baseline file path for AutomationAPI project"""
@@ -100,7 +103,7 @@ def load_baseline(project_name: str) -> List[Dict]:
 
 
 def save_baseline(project_name: str, failures: List[Dict], admin_key: str):
-    """Save baseline for AutomationAPI project (admin only)"""
+    """Save baseline for AutomationAPI project (admin only) with GitHub backup"""
     expected = os.getenv("BASELINE_ADMIN_KEY")
     if not expected:
         raise RuntimeError("❌ BASELINE_ADMIN_KEY not configured")
@@ -121,17 +124,21 @@ def save_baseline(project_name: str, failures: List[Dict], admin_key: str):
             }
             clean_failures.append(clean_failure)
     
-    # Save locally (your original code)
+    # 1️⃣ Save locally
     path = _get_baseline_path(project_name)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(clean_failures, f, indent=2)
     
-    # NEW: Additional GitHub storage backup
-    _save_to_github_storage(project_name, clean_failures)
+    # 2️⃣ GitHub storage backup
+    try:
+        _save_to_github_storage(project_name, clean_failures)
+    except Exception as e:
+        st.warning(f"⚠️ API GitHub backup failed: {str(e)}")
+        print(f"⚠️ API GitHub backup error: {e}")
 
 
 # -----------------------------------------------------------
-# NEW: ADDITIONAL GITHUB STORAGE BACKUP
+# GITHUB STORAGE BACKUP FOR AUTOMATIONAPI
 # -----------------------------------------------------------
 def _save_to_github_storage(project_name: str, failures: List[Dict]):
     """
@@ -216,7 +223,7 @@ def list_available_baselines() -> List[str]:
 
 
 # -----------------------------------------------------------
-# NEW: LIST GITHUB STORAGE BACKUPS
+# LIST GITHUB STORAGE BACKUPS
 # -----------------------------------------------------------
 def list_github_baselines(project_name: str = None) -> List[Dict]:
     """
@@ -242,7 +249,7 @@ def list_github_baselines(project_name: str = None) -> List[Dict]:
 
 
 # -----------------------------------------------------------
-# NEW: LOAD GITHUB STORAGE BACKUP
+# LOAD GITHUB STORAGE BACKUP
 # -----------------------------------------------------------
 def load_github_baseline(filename: str) -> List[Dict]:
     """
