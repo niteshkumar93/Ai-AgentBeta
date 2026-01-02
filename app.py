@@ -340,20 +340,6 @@ with st.sidebar:
             synced = baseline_service.sync_from_github()
         st.success(f"✅ {synced} baseline(s) synced from GitHub")
         st.rerun()
-
-    # -----------------------------------------------------------
-    # NEW: BASELINE MANAGEMENT SECTION
-    # -----------------------------------------------------------
-    st.markdown("---")
-    st.subheader("📋 Manage Saved Baselines")
-    
-    # Dropdown to select platform
-    platform_filter = st.selectbox(
-        "Filter by Platform:",
-        options=["All", "Provar", "AutomationAPI"],
-        index=0,
-        key="platform_filter"
-    )
     
     # Load baselines from GitHub
     if st.button("🔍 Show Baselines", key="show_baselines_btn"):
