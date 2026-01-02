@@ -609,21 +609,59 @@ elif report_type == "Provar Regression Reports":
                                 "projectCachePath": shorten_project_cache_path(f.get("projectCachePath", "")),
                             })
                     
-                    # Compare with baseline (use multi-baseline if enabled and available)
+                    # -----------------------------------------------------------
                     baseline_exists_flag = False
-                    if MULTI_BASELINE_AVAILABLE and use_multi_baseline:
-                        baseline_exists_flag = multi_baseline_exists(detected_project)
-                        if baseline_exists_flag:
-                            new_f, existing_f = compare_multi_baseline(detected_project, normalized)
+                    new_f = []
+                    existing_f = []
+
+                    try:
+                        # Get all baselines for this project from GitHub
+                        github_files = baseline_service.list(
+                            platform="provar",
+                            project=detected_project
+                        )
+                        if github_files:
+                            baseline_exists_flag = True
+                            # Load the latest baseline (files are sorted by timestamp)
+                            latest_file = github_files[0]
+                            baseline_data = baseline_service.load(
+                                 latest_file['name'],
+                                 platform="provar"
+                            )
+                            if baseline_data and baseline_data.get('failures'):
+                                # Compare with baseline
+                                baseline_failures = baseline_data.get('failures', [])
+                               # Create signature set from baseline
+                                baseline_sigs = set()
+                                for b in baseline_failures:
+                                    sig = f"{b.get('testcase')}|{b.get('error')}"
+                                    baseline_sigs.add(sig)
+                                # Compare current failures
+                                for failure in normalized:
+                                    sig = f"{failure.get('testcase')}|{failure.get('error')}"
+
+                                    if sig in baseline_sigs:
+                                        existing_f.append(failure)
+                                    else:
+                                            new_f.append(failure)
+                            else:
+                                # Baseline exists but has no failures
+                                new_f = normalized
+                                existing_f = []            
                         else:
-                            new_f, existing_f = normalized, []
-                    else:
-                        baseline_exists_flag = bool(load_provar_baseline(detected_project))
-                        if baseline_exists_flag:
-                            new_f, existing_f = compare_provar_baseline(detected_project, normalized)
-                        else:
-                            new_f, existing_f = normalized, []
-                    
+                             # No baseline exists - all failures are new
+                            baseline_exists_flag = False
+                            new_f = normalized
+                            existing_f = []
+                    except Exception as e:
+                        print(f"⚠️ Error loading baseline from GitHub: {e}")
+                        import traceback
+                        traceback.print_exc()
+                         # If error, treat all as new
+                        baseline_exists_flag = False
+                        new_f = normalized
+                        existing_f = []
+                    # -----------------------------------------------------------
                     st.session_state.all_results.append({
                         'filename': xml_file.name,
                         'project': detected_project,
@@ -1018,45 +1056,62 @@ else:
                     
                     if failures:
                         project = failures[0].get("project", "Unknown")
-                        
-                       # ============================================================
-                        # COMPARE WITH BASELINE (MULTI-BASELINE AWARE)
-                        # ============================================================
-                        
+
                         # Filter out metadata record
                         real_failures = [f for f in failures if not f.get("_no_failures")]
-                        
-                        # Determine which baseline system to use
-                        if API_MULTI_BASELINE_AVAILABLE and use_multi_baseline:
-                            # Use multi-baseline engine
-                            if api_baseline_exists_multi(project):
-                                # Compare with latest baseline
-                                new_f, existing_f = compare_api_baseline_multi(
-                                    project,
-                                    real_failures
-                                )
-                            else:
+                        # ✅ NEW: Load baseline from GitHub using BaselineService
+                        baseline_exists_flag = False
+                        new_f = []
+                        existing_f = []
+                        try:
+                            # Get all baselines for this project from GitHub
+                            github_files = baseline_service.list(
+                                platform="automation_api",
+                                project=project
+                            )
+                            if github_files:
+                                    baseline_exists_flag = True
+                                    # Load the latest baseline (files are sorted by timestamp)
+                                    latest_file = github_files[0]
+                                    baseline_data = baseline_service.load(
+                                        latest_file['name'],
+                                        platform="automation_api"
+                                    )
+                                    if baseline_data and baseline_data.get('failures'):
+                                        # Compare with baseline
+                                        baseline_failures = baseline_data.get('failures', [])
+                                        # Create signature set from baseline
+                                        baseline_sigs = set()
+                                        for b in baseline_failures:
+                                            sig = f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}"
+                                            baseline_sigs.add(sig)
+                                        # Compare current failures
+                                        for failure in real_failures:
+                                            sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}"
+                                            if sig in baseline_sigs:
+                                                existing_f.append(failure)
+                                            else:
+                                                new_f.append(failure)
+                                    else:           
+                                        # Baseline exists but has no failures
+                                        new_f = real_failures
+                                        existing_f = []
+                            else:  
                                 # No baseline exists - all failures are new
-                                new_f, existing_f = real_failures, []
-                            
-                            # Check baseline existence
-                            baseline_exists_flag = api_baseline_exists_multi(project)
-                        
-                        else:
-                            # Use legacy single-baseline system
-                            if api_baseline_exists_legacy(project):
-                                # Compare with single baseline
-                                new_f, existing_f = compare_api_baseline_legacy(
-                                    project,
-                                    real_failures
-                                )
-                            else:
-                                # No baseline exists - all failures are new
-                                new_f, existing_f = real_failures, []
-                            
-                            # Check baseline existence
-                            baseline_exists_flag = api_baseline_exists_legacy(project)
-                        
+                                baseline_exists_flag = False
+                                new_f = real_failures
+                                existing_f = []
+                        except Exception as e:
+                            print(f"⚠️ Error loading baseline from GitHub: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            # If error, treat all as new
+                            baseline_exists_flag = False
+                            new_f = real_failures
+                            existing_f = []                             
+
+
+
                         # Get statistics
                         stats = get_failure_statistics(real_failures if real_failures else failures)
                         
