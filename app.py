@@ -1463,7 +1463,7 @@ else:
                                         project=result['project'],
                                         platform="automation_api",
                                         failures=result['all_failures'],
-                                        label=baseline_label or None
+                                        label=baseline_label if baseline_label else None
                                         )
                                         st.success(f"✅ Baseline saved to GitHub as {baseline_id}!")
                                         st.rerun()
