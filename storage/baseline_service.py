@@ -2,11 +2,6 @@
 Baseline Service - Unified baseline management with GitHub storage
 This service ensures ALL baselines are saved to GitHub automatically
 """
-# Import the actual BaselineService from storage module
-from storage.baseline_service import BaselineService
-
-# Re-export for convenience
-__all__ = ['BaselineService']
 
 import json
 import os
