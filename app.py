@@ -6,7 +6,6 @@ import streamlit as st
 import os
 
 # Import services
-from services.baseline_service import BaselineService
 from github_storage import GitHubStorage
 from services.analysis_service import AnalysisService
 from services.ai_service import AIService
@@ -57,9 +56,7 @@ def initialize_services():
         repo_owner=st.secrets.get("GITHUB_OWNER"),
         repo_name=st.secrets.get("GITHUB_REPO")
     )
-    
-    # Baseline Service
-    baseline_service = BaselineService(github)
+
     
     # Analysis Service
     analysis_service = AnalysisService(baseline_service)
@@ -252,3 +249,4 @@ with col2:
 with col3:
     if st.button("📚 Documentation", key="footer_docs", use_container_width=True):
         st.info("📚 Documentation coming soon!")
+        
