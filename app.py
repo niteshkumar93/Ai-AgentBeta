@@ -1,26 +1,20 @@
 """
-Provar AI - Multi-Platform XML Analyzer (Refactored)
+Provar AI - Multi-Platform XML Analyzer (Refactored with Navigation)
 Main application entry point
 """
 import streamlit as st
 import os
 
 # Import services
-from storage.baseline_service import BaselineService
+from services.baseline_service import BaselineService
 from github_storage import GitHubStorage
 from services.analysis_service import AnalysisService
 from services.ai_service import AIService
 
 # Import UI components
-from ui.sidebar import render_sidebar
-from ui.results_view import (
-    format_execution_time,
-    render_summary_card,
-    render_overall_summary,
-    render_failure_details,
-    render_export_section,
-    render_batch_ai_analysis
-)
+from ui.sidebar import render_sidebar, render_page_sidebar_content
+from ui.navigation import NavigationMenu, NavigationState
+from ui.pages import render_dashboard, render_trends, render_settings
 
 # Import existing modules (keep backward compatibility)
 from xml_extractor import extract_failed_tests
@@ -36,7 +30,7 @@ from baseline_tracker_dashboard import render_baseline_tracker_dashboard
 # -----------------------------------------------------------
 # CONSTANTS
 # -----------------------------------------------------------
-APP_VERSION = "3.3.0"  # Updated version with modular architecture
+APP_VERSION = "4.0.0"  # Updated version with navigation refactor
 
 # Check for multi-baseline availability
 try:
@@ -106,7 +100,8 @@ def shorten_project_cache_path(path: str) -> str:
 st.set_page_config(
     "Provar AI - Multi-Platform XML Analyzer", 
     layout="wide", 
-    page_icon="🚀"
+    page_icon="🚀",
+    initial_sidebar_state="expanded"
 )
 
 # Custom CSS
@@ -144,13 +139,11 @@ st.markdown("""
         border-left: 4px solid #ffc107;
         background: #fff9e6;
     }
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
-
-st.markdown(
-    '<div class="main-header">🤖 Provar AI - Multi-Platform Report Analysis Tool</div>', 
-    unsafe_allow_html=True
-)
 
 # -----------------------------------------------------------
 # INITIALIZE SERVICES
@@ -170,6 +163,11 @@ if "baselines_synced" not in st.session_state:
         print(f"Auto-sync skipped: {e}")
 
 # -----------------------------------------------------------
+# INITIALIZE NAVIGATION
+# -----------------------------------------------------------
+NavigationState.initialize()
+
+# -----------------------------------------------------------
 # RENDER SIDEBAR
 # -----------------------------------------------------------
 sidebar_settings = render_sidebar(
@@ -179,17 +177,25 @@ sidebar_settings = render_sidebar(
     api_multi_baseline_available=API_MULTI_BASELINE_AVAILABLE
 )
 
+# Render page-specific sidebar content
+page_sidebar_settings = render_page_sidebar_content(sidebar_settings['current_page'])
+sidebar_settings.update(page_sidebar_settings)
+
 # -----------------------------------------------------------
 # MAIN CONTENT ROUTING
 # -----------------------------------------------------------
-report_type = sidebar_settings['report_type']
+current_page = sidebar_settings['current_page']
 
-if report_type == "📈 Baseline Tracker":
-    # Baseline Tracker Dashboard
-    render_baseline_tracker_dashboard()
+# Render page header
+NavigationMenu.render_page_header(current_page)
 
-elif report_type == "Provar Regression Reports":
-    # Import Provar-specific components
+# Route to appropriate page
+if current_page == "dashboard":
+    # Dashboard page
+    render_dashboard(baseline_service)
+
+elif current_page == "provar":
+    # Provar Reports page
     from ui.provar_view import render_provar_analysis
     render_provar_analysis(
         analysis_service=analysis_service,
@@ -201,8 +207,8 @@ elif report_type == "Provar Regression Reports":
         shorten_path_func=shorten_project_cache_path
     )
 
-else:  # AutomationAPI Reports
-    # Import AutomationAPI-specific components
+elif current_page == "automation_api":
+    # AutomationAPI Reports page
     from ui.api_view import render_api_analysis
     render_api_analysis(
         analysis_service=analysis_service,
@@ -213,3 +219,36 @@ else:  # AutomationAPI Reports
         group_func=group_failures_by_spec,
         stats_func=get_failure_statistics
     )
+
+elif current_page == "baselines":
+    # Baseline Management page
+    render_baseline_tracker_dashboard()
+
+elif current_page == "trends":
+    # Trends Analysis page
+    render_trends(baseline_service)
+
+elif current_page == "settings":
+    # Settings page
+    render_settings(baseline_service)
+
+else:
+    # Fallback
+    st.error(f"Unknown page: {current_page}")
+    st.info("Please use the navigation menu to select a valid page.")
+
+# -----------------------------------------------------------
+# FOOTER
+# -----------------------------------------------------------
+st.markdown("---")
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.caption(f"🤖 Provar AI v{APP_VERSION}")
+
+with col2:
+    st.caption("Made with ❤️ using Streamlit")
+
+with col3:
+    if st.button("📚 Documentation", key="footer_docs", use_container_width=True):
+        st.info("📚 Documentation coming soon!")
