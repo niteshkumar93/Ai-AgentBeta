@@ -366,7 +366,7 @@ with st.sidebar:
     # Advanced AI Features
     with st.expander("🎯 Advanced AI Features"):
         enable_batch_analysis = st.checkbox("Batch Pattern Analysis", value=True, help="Find common patterns across failures")
-        enable_jira_generation = st.checkbox("Jira Ticket Generation", value=True, help="Auto-generate Jira tickets")
+        enable_jira_generation = st.checkbox("Jira Ticket Generation", value=False, help="Auto-generate Jira tickets")
         enable_test_improvements = st.checkbox("Test Improvement Suggestions", value=False, help="Get suggestions to improve test stability")
     
     admin_key = st.text_input("🔐 Admin Key", type="password", help="Required for saving baselines", key="admin_key_input")
