@@ -17,6 +17,11 @@ github = GitHubStorage(
 
 baseline_service = BaselineService(github)
 
+import hashlib
+
+def stable_key(*parts):
+    raw = "|".join(str(p) for p in parts)
+    return hashlib.md5(raw.encode()).hexdigest()
 
 # -----------------------------------------------------------
 # IMPORT MULTI-BASELINE ENGINE (NEW - OPTIONAL)
@@ -765,7 +770,13 @@ elif report_type == "Provar Regression Reports":
                                                             jira_content,
                                                             file_name=f"jira_{f['testcase'][:30]}.txt",
                                                             key=f"jira_provar_{idx}_{i}"
-                                                        )
+                                                            key=stable_key(
+                                                                "jira",
+                                                                result['filename'],
+                                                                failure['test_name'],
+                                                                failure['error_summary']
+                                                            )
+                                                        )    
                                             
                                             if enable_test_improvements and len(ai_tab_objects) > 2:
                                                 with ai_tab_objects[-1]:
