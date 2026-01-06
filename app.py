@@ -1434,23 +1434,31 @@ elif current_page == 'automation_api':
                                 with st.expander(f"📋 {spec_name} — {len(spec_failures)} failures", expanded=False):
                                     for i, failure in enumerate(spec_failures):
                                         icon = "🟡" if failure['is_skipped'] else "🔴"
-                                        
-                                        with st.expander(f"{icon} {i+1}. {failure['test_name']}", expanded=False):
-                                            if failure['is_skipped']:
-                                                st.warning("⚠️ This test was skipped.")
-                                            st.write("**Test:**", failure['test_name'])
+
+                                    # Main failure display
+                                    with st.expander(f"{icon} {i+1}. {failure['test_name']}", expanded=False):          
+                                        if failure['is_skipped']:
+                                            st.warning("⚠️ This test was skipped.")
+                                        st.write("**Test:**", failure['test_name'])
                                         st.write("**Type:**", failure['failure_type'])
-                                        st.error(f"**Error:** {failure['error_summary']}")
-                                        
+                                        st.write("**Time:**", f"{failure['execution_time']}s")
+                                        st.error(f"**Error:** {failure['error_summary']}")    
+                                        # Details expander
                                         with st.expander("📋 Details"):
                                             st.code(failure['error_details'], language="text")
-                                        
-                                        if failure['full_stack_trace']:
-                                            with st.expander("🔍 Stack"):
-                                                st.code(failure['full_stack_trace'], language="text")
-                
-                st.markdown("---")
-                
+                                        # Stack trace expander (if available)
+                                        if failure.get('full_stack_trace'):    
+                                           with st.expander("🔍 Stack Trace"):
+                                               st.code(failure['full_stack_trace'], language="text")
+                                         # AI Analysis (if enabled)        
+                                           if use_ai:
+                                                  with st.spinner("Analyzing..."):
+                                                    ai_analysis = generate_ai_summary(
+                                                         failure['test_name'],
+                                                         failure['error_summary'],
+                                                         failure['error_details']
+                                                    )
+                                                    st.info(ai_analysis)
                 # Baseline Management
                 st.markdown("### 💾 Save Baseline")
                 
