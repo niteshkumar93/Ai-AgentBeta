@@ -627,28 +627,80 @@ elif current_page == 'baselines':
             for baseline in project_baselines:
                 timestamp = _format_time(baseline['name'].split('_')[-1].replace('.json', ''))
                 
-                col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
-                
-                with col1:
-                    st.text(f"📄 {baseline['name']}")
-                
-                with col2:
-                    st.text(f"🕐 {timestamp}")
-                
-                with col3:
-                    # Load failure count
+                # ✅ Use expander for better layout
+                with st.expander(f"📄 {baseline['name']} | 🕐 {timestamp}", expanded=False):
+                    
+                    # Load baseline data
                     try:
                         baseline_data = baseline_service.load(baseline['name'], platform=platform_filter)
-                        if baseline_data and 'failures' in baseline_data:
-                            failure_count = len(baseline_data['failures'])
-                            st.text(f"❌ {failure_count} failures")
-                        else:
-                            st.text("❌ - failures")
+                        has_data = baseline_data and 'failures' in baseline_data
+                        failure_count = len(baseline_data['failures']) if has_data else 0
                     except:
-                        st.text("❌ ? failures")
-                
-                with col4:
-                    if st.button("🗑️", key=f"delete_{baseline['name']}", help="Delete baseline"):
+                        has_data = False
+                        failure_count = 0
+                    
+                    # Metrics row
+                    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                    
+                    with col1:
+                        st.metric("❌ Failures", failure_count)
+                    
+                    with col2:
+                        st.caption(f"📅 {timestamp}")
+                    
+                    with col3:
+                        # ✅ NEW: View Failures Button
+                        view_key = f"view_{baseline['name']}"
+                        if st.button("👁️ View Failures", key=view_key, use_container_width=True):
+                            current = st.session_state.get(view_key, False)
+                            st.session_state[view_key] = not current
+                            st.rerun()
+                    
+                    with col4:
+                        if st.button("🗑️", key=f"delete_{baseline['name']}", help="Delete"):
+                            if admin_key:
+                                baseline_service.delete(baseline['name'], platform=platform_filter)
+                                st.success("✅ Deleted!")
+                                load_cached_baselines.clear()
+                                st.rerun()
+                            else:
+                                st.error("❌ Admin key required!")
+                    
+                    # ✅ NEW: Show failures if button clicked
+                    if st.session_state.get(view_key, False):
+                        st.markdown("---")
+                        st.markdown("### 📋 Failures")
+                        
+                        if has_data and failure_count > 0:
+                            failures = baseline_data.get('failures', [])
+                            
+                            # Display based on platform
+                            if platform_filter == "provar":
+                                for i, f in enumerate(failures):
+                                    with st.expander(f"{i+1}. {f.get('testcase', 'Unknown')}", expanded=False):
+                                        st.write("**Error:**", f.get('error', 'N/A'))
+                                        st.code(f.get('details', 'No details'), language="text")
+                            
+                            else:  # automation_api
+                                for i, f in enumerate(failures):
+                                    with st.expander(f"{i+1}. {f.get('test_name', 'Unknown')}", expanded=False):
+                                        st.write("**Error:**", f.get('error_summary', 'N/A'))
+                                        st.code(f.get('error_details', 'No details'), language="text")
+                            
+                            # Export
+                            df = pd.DataFrame(failures)
+                            csv = df.to_csv(index=False)
+                            st.download_button(
+                                "📥 Download CSV",
+                                csv,
+                                file_name=f"{baseline['name']}_failures.csv",
+                                mime="text/csv",
+                                key=f"export_{baseline['name']}"
+                            )
+                        
+                        if st.button("❌ Close", key=f"close_{baseline['name']}"):
+                            st.session_state[view_key] = False
+                            st.rerun()
                         if admin_key:
                             try:
                                 baseline_service.delete(baseline['name'], platform=platform_filter)
@@ -901,20 +953,57 @@ elif current_page == 'provar':
                     except:
                         available_baselines = []
                     
-                    st.session_state.all_results.append({
-                        'filename': xml_file.name,
-                        'project': detected_project,
-                        'all_failures': normalized,
-                        'new_failures': [],
-                        'existing_failures': [],
-                        'new_count': 0,
-                        'existing_count': 0,
-                        'total_count': len(normalized),
-                        'baseline_exists': len(available_baselines) > 0,
-                        'available_baselines': available_baselines,
-                        'execution_time': execution_time,
-                        'baseline_compared': False
-                    })
+                    # ✅ AUTOMATIC BASELINE COMPARISON
+                        new_f = []
+                        existing_f = []
+                        baseline_compared = False
+
+                        if available_baselines:
+                            try:
+                                latest_baseline = available_baselines[0]
+                                baseline_data = baseline_service.load(latest_baseline['name'], platform="provar")
+                                
+                                if baseline_data and baseline_data.get('failures'):
+                                    baseline_failures = baseline_data.get('failures', [])
+                                    baseline_sigs = set()
+                                    
+                                    for b in baseline_failures:
+                                        sig = f"{b.get('testcase')}|{b.get('error')}"
+                                        baseline_sigs.add(sig)
+                                    
+                                    for failure in normalized:
+                                        sig = f"{failure.get('testcase')}|{failure.get('error')}"
+                                        if sig in baseline_sigs:
+                                            existing_f.append(failure)
+                                        else:
+                                            new_f.append(failure)
+                                    
+                                    baseline_compared = True
+                                else:
+                                    new_f = normalized
+                                    existing_f = []
+                            except Exception as e:
+                                print(f"Auto-comparison error: {e}")
+                                new_f = normalized
+                                existing_f = []
+                        else:
+                            new_f = normalized
+                            existing_f = []
+
+                        st.session_state.all_results.append({
+                            'filename': xml_file.name,
+                            'project': detected_project,
+                            'all_failures': normalized,
+                            'new_failures': new_f,  # ✅ Populated automatically
+                            'existing_failures': existing_f,  # ✅ Populated automatically
+                            'new_count': len(new_f),
+                            'existing_count': len(existing_f),
+                            'total_count': len(normalized),
+                            'baseline_exists': len(available_baselines) > 0,
+                            'available_baselines': available_baselines,
+                            'execution_time': execution_time,
+                            'baseline_compared': baseline_compared  # ✅ True if auto-compared
+                        })
                 
                 progress_bar.progress((idx + 1) / len(uploaded_files))
             
@@ -1210,18 +1299,55 @@ elif current_page == 'automation_api':
                         
                         stats = get_failure_statistics(real_failures if real_failures else failures)
                         
+                        # ✅ AUTOMATIC BASELINE COMPARISON
+                        new_f = []
+                        existing_f = []
+                        baseline_compared = False
+
+                        if available_baselines:
+                            try:
+                                latest_baseline = available_baselines[0]
+                                baseline_data = baseline_service.load(latest_baseline['name'], platform="automation_api")
+                                
+                                if baseline_data and baseline_data.get('failures'):
+                                    baseline_failures = baseline_data.get('failures', [])
+                                    baseline_sigs = set()
+                                    
+                                    for b in baseline_failures:
+                                        sig = f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}"
+                                        baseline_sigs.add(sig)
+                                    
+                                    for failure in real_failures:
+                                        sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}"
+                                        if sig in baseline_sigs:
+                                            existing_f.append(failure)
+                                        else:
+                                            new_f.append(failure)
+                                    
+                                    baseline_compared = True
+                                else:
+                                    new_f = real_failures
+                                    existing_f = []
+                            except Exception as e:
+                                print(f"Auto-comparison error: {e}")
+                                new_f = real_failures
+                                existing_f = []
+                        else:
+                            new_f = real_failures
+                            existing_f = []
+
                         st.session_state.api_results.append({
                             'filename': xml_file.name,
                             'project': project,
                             'all_failures': real_failures if real_failures else [],
-                            'new_failures': [],
-                            'existing_failures': [],
+                            'new_failures': new_f,  # ✅ Populated automatically
+                            'existing_failures': existing_f,  # ✅ Populated automatically
                             'grouped_failures': group_failures_by_spec(real_failures) if real_failures else {},
                             'stats': stats,
                             'baseline_exists': len(available_baselines) > 0,
                             'available_baselines': available_baselines,
                             'timestamp': failures[0].get("timestamp", "Unknown") if failures else "Unknown",
-                            'baseline_compared': False
+                            'baseline_compared': baseline_compared  # ✅ True if auto-compared
                         })
                 
                 except Exception as e:
@@ -1427,36 +1553,40 @@ elif current_page == 'automation_api':
                                         st.markdown(f"{icon} **{i+1}. {failure['test_name']}** ({failure['execution_time']}s)")
                                         st.caption(f"Error: {failure['error_summary']}")
                     else:
-                        # Display all failures if not compared
+    # Display all failures if not compared
                         st.markdown("### 📋 All Failures")
                         if result['grouped_failures']:
                             for spec_name, spec_failures in result['grouped_failures'].items():
                                 with st.expander(f"📋 {spec_name} — {len(spec_failures)} failures", expanded=False):
                                     for i, failure in enumerate(spec_failures):
                                         icon = "🟡" if failure['is_skipped'] else "🔴"
-
-                                    # Main failure display
-                                    with st.expander(f"{icon} {i+1}. {failure['test_name']}", expanded=False):          
-                                        if failure['is_skipped']:
-                                            st.warning("⚠️ This test was skipped.")
-                                        st.write("**Test:**", failure['test_name'])
-                                        st.write("**Type:**", failure['failure_type'])
-                                        st.write("**Time:**", f"{failure['execution_time']}s")
-                                        st.error(f"**Error:** {failure['error_summary']}")    
-                                        # Details expander
-                                        with st.expander("📋 Details"):
-                                            st.code(failure['error_details'], language="text")
-                                        # Stack trace expander (if available)
-                                        if failure.get('full_stack_trace'):    
-                                           with st.expander("🔍 Stack Trace"):
-                                               st.code(failure['full_stack_trace'], language="text")
-                                         # AI Analysis (if enabled)        
-                                           if use_ai:
-                                                  with st.spinner("Analyzing..."):
+                                        
+                                        # ✅ FIXED: Proper indentation
+                                        with st.expander(f"{icon} {i+1}. {failure['test_name']}", expanded=False):
+                                            if failure['is_skipped']:
+                                                st.warning("⚠️ This test was skipped.")
+                                            
+                                            st.write("**Test:**", failure['test_name'])
+                                            st.write("**Type:**", failure['failure_type'])
+                                            st.write("**Time:**", f"{failure['execution_time']}s")
+                                            st.error(f"**Error:** {failure['error_summary']}")
+                                            
+                                            # ✅ Details expander inside failure expander
+                                            with st.expander("📋 Full Error Details"):
+                                                st.code(failure['error_details'], language="text")
+                                            
+                                            # ✅ Stack trace expander inside failure expander
+                                            if failure.get('full_stack_trace'):
+                                                with st.expander("🔍 Stack Trace"):
+                                                    st.code(failure['full_stack_trace'], language="text")
+                                            
+                                            # ✅ AI Analysis inside failure expander
+                                            if use_ai and not failure['is_skipped']:
+                                                with st.spinner("Analyzing..."):
                                                     ai_analysis = generate_ai_summary(
-                                                         failure['test_name'],
-                                                         failure['error_summary'],
-                                                         failure['error_details']
+                                                        failure['test_name'],
+                                                        failure['error_summary'],
+                                                        failure['error_details']
                                                     )
                                                     st.info(ai_analysis)
                 # Baseline Management
