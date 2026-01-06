@@ -1513,14 +1513,23 @@ elif current_page == 'automation_api':
                         
                         with tab1:
                             if new_specs:
-                                st.markdown("#### 🆕 New Spec Files")
+                                st.markdown("#### 🆕 New Spec Files (Not in Baseline)")
+                                st.info(f"These {len(new_specs)} spec file(s) are completely new and were not in the baseline")
+
                                 for spec in sorted(new_specs):
                                     failures = new_by_spec[spec]
-                                    with st.expander(f"🆕 {spec} — {len(failures)} failures", expanded=False):
+                                    real_count = len([f for f in failures if not f.get('is_skipped')])
+                                    skipped_count = len([f for f in failures if f.get('is_skipped')])
+                                    
+                                    with st.expander(
+                                        f"🆕 {spec} — {len(failures)} failure (s) "
+                                        f"(🔴 {real_count} real, 🟡 {skipped_count} skipped)",
+                                        expanded=False
+                                        ):
                                         for i, failure in enumerate(failures):
                                             icon = "🟡" if failure.get('is_skipped') else "🔴"
                                             # Each failure gets its own expander - MUST be indented here!
-                                        with st.expander(f"{icon} {i+1}. {failure['test_name']}", expanded=False):
+                                        with st.markdown(f"{icon} {i+1}. {failure['test_name']}", expanded=False):
                                              if failure['is_skipped']:
                                                  st.warning("⚠️ This test was skipped.")
                                             
