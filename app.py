@@ -1530,20 +1530,20 @@ elif current_page == 'automation_api':
                                             icon = "🟡" if failure.get('is_skipped') else "🔴"
                                             # Each failure gets its own expander - MUST be indented here!
                                         with st.markdown(f"{icon} {i+1}. {failure['test_name']}", expanded=False):
-                                             if failure['is_skipped']:
+                                            if failure['is_skipped']:
                                                  st.warning("⚠️ This test was skipped.")
                                             
-                                             st.write("**Test:**", failure['test_name'])
-                                             st.write("**Type:**", failure['failure_type'])
-                                             st.write("**Time:**", f"{failure['execution_time']}s")
-                                             st.error(f"**Error:** {failure['error_summary']}")
+                                            st.write("**Test:**", failure['test_name'])
+                                            st.write("**Type:**", failure['failure_type'])
+                                            st.write("**Time:**", f"{failure['execution_time']}s")
+                                            st.error(f"**Error:** {failure['error_summary']}")
                                             
                                              # Details expander - inside the failure expander
-                                             with st.expander("📋 Full Error Details"):
+                                            with st.expander("📋 Full Error Details"):
                                                  st.code(failure['error_details'], language="text")
                                             
                                              # Stack trace expander - inside the failure expander
-                                             if failure.get('full_stack_trace'):
+                                            if failure.get('full_stack_trace'):
                                                  with st.expander("🔍 Stack Trace"):
                                                      st.code(failure['full_stack_trace'], language="text")
                             
