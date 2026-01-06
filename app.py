@@ -1529,7 +1529,7 @@ elif current_page == 'automation_api':
                                         for i, failure in enumerate(failures):
                                             icon = "🟡" if failure.get('is_skipped') else "🔴"
                                             # Each failure gets its own expander - MUST be indented here!
-                                        with st.markdown(f"{icon} {i+1}. {failure['test_name']}", expanded=False):
+                                        with st.expander(f"{icon} {i+1}. {failure['test_name']}", expanded=False):
                                             if failure['is_skipped']:
                                                  st.warning("⚠️ This test was skipped.")
                                             
