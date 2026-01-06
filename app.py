@@ -1544,8 +1544,8 @@ elif current_page == 'automation_api':
                                             
                                              # Stack trace expander - inside the failure expander
                                             if failure.get('full_stack_trace'):
-                                                 with st.expander("🔍 Stack Trace"):
-                                                     st.code(failure['full_stack_trace'], language="text")
+                                                with st.expander("🔍 Stack Trace"):
+                                                    st.code(failure['full_stack_trace'], language="text")
                             
                             if mixed_specs:
                                 st.markdown("---")
