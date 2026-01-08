@@ -903,6 +903,8 @@ elif current_page == 'settings':
 
 # ===================================================================
 # CORRECTED PROVAR REPORTS SECTION
+# Replace the section starting from "elif current_page == 'provar':" 
+# with this corrected version
 
 elif current_page == 'provar':
     st.markdown("## 📁 Upload Provar XML Reports")
@@ -1323,14 +1325,7 @@ elif current_page == 'automation_api':
                                         baseline_sigs.add(sig)
                                     
                                     for failure in real_failures:
-                                        sig = "|".join([
-                                        failure.get("spec_file", ""),
-                                        failure.get("test_name", ""),
-                                        failure.get("error_summary", ""),
-                                        failure.get("actual_value", ""),
-                                        failure.get("expected_value", ""),
-                                    ])
-
+                                        sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}"
                                         if sig in baseline_sigs:
                                             existing_f.append(failure)
                                         else:
