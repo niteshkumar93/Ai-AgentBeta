@@ -122,20 +122,6 @@ PROJECT_NAME_MAPPING = {
    
 }
 
-# Reverse mapping for saving baselines
-PROJECT_CODE_MAPPING = {v: k for k, v in PROJECT_NAME_MAPPING.items()}
-
-def get_full_project_name(short_code):
-    """Convert short project code to full name"""
-    return PROJECT_NAME_MAPPING.get(short_code, short_code)
-
-def get_project_code(full_name):
-    """Convert full project name to short code"""
-    return PROJECT_CODE_MAPPING.get(full_name, full_name)
-# Project name mapping - maps short codes to full names
-PROJECT_NAME_MAPPING = {
-    
-}
 
 
 # ===================================================================
