@@ -109,29 +109,25 @@ def extract_provar_project_from_baseline(filename: str) -> str:
     """
     Extract EXACT Provar project name from baseline filename.
 
-    Example:
     Provar_Smoke_CC_Windows_provar_baseline_20260105_083448.json
-    → Smoke_CC_Windows
+    -> Smoke_CC_Windows
     """
     name = filename.replace(".json", "")
+
+    if not name.lower().startswith("provar_"):
+        return "UNKNOWN_PROJECT"
+
+    name = name[len("provar_"):]  # remove prefix
     parts = name.split("_")
 
-    try:
-        # Remove platform prefix
-        if parts[0].lower() == "provar":
-            parts = parts[1:]
+    project_parts = []
+    for part in parts:
+        if part.lower() in {"provar", "baseline"}:
+            break
+        project_parts.append(part)
 
-        # Stop at baseline marker
-        stop_words = {"provar", "baseline"}
-        project_parts = []
-        for part in parts:
-            if part.lower() in stop_words:
-                break
-            project_parts.append(part)
+    return "_".join(project_parts) if project_parts else "UNKNOWN_PROJECT"
 
-        return "_".join(project_parts) if project_parts else "UNKNOWN_PROJECT"
-    except Exception:
-        return "UNKNOWN_PROJECT"
 
 # ===================================================================
 # CACHING AND SESSION STATE INITIALIZATION
@@ -597,13 +593,16 @@ elif current_page == 'baselines':
         # Group baselines by project first
         baselines_by_project = {}
 
-        baselines_by_project = {}
-
+        
         for baseline in all_baselines:
             if platform_filter == "provar":
                 project_name = extract_provar_project_from_baseline(baseline["name"])
             else:
-                project_name = baseline["project"] if "project" in baseline else baseline["name"]
+                if platform_filter == "automation_api":
+                    project_name = baseline.get("project")
+                    if not project_name:
+                       project_name = extract_project_from_baseline_name(baseline["name"])
+
 
             baselines_by_project.setdefault(project_name, []).append(baseline)
 
@@ -614,10 +613,17 @@ elif current_page == 'baselines':
             baselines_by_project[project_name].append(baseline)
 
         for project in baselines_by_project:
+            def extract_ts(name):
+                try:
+                    return name.split("_")[-1].replace(".json", "")
+                except:
+                    return ""
+
             baselines_by_project[project].sort(
-                key=lambda b: b['name'],
+                key=lambda b: extract_ts(b['name']),
                 reverse=True
             )
+
 
         # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
