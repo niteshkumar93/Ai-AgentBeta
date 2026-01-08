@@ -85,7 +85,24 @@ except ImportError:
 
 # Constants
 APP_VERSION = "4.0.0"
+# Project name mapping - maps short codes to full names
+PROJECT_NAME_MAPPING = {
+    'LS': 'Lightning Sales',
+    'CC': 'Classic Console',
+    'CS': 'Classic Sales',
+    'LC': 'Lightning Console',
+}
 
+# Reverse mapping for saving baselines
+PROJECT_CODE_MAPPING = {v: k for k, v in PROJECT_NAME_MAPPING.items()}
+
+def get_full_project_name(short_code):
+    """Convert short project code to full name"""
+    return PROJECT_NAME_MAPPING.get(short_code, short_code)
+
+def get_project_code(full_name):
+    """Convert full project name to short code"""
+    return PROJECT_CODE_MAPPING.get(full_name, full_name)
 # ===================================================================
 # CACHING AND SESSION STATE INITIALIZATION
 # ===================================================================
@@ -498,15 +515,13 @@ if current_page == 'dashboard':
         if st.button("📈 View Baselines", use_container_width=True, type="primary"):
             st.session_state.current_page = 'baselines'
             st.rerun()
-
 # ===================================================================
-# BASELINES PAGE WITH PLATFORM FILTER AND CACHING
+# BASELINES PAGE SECTION
 # ===================================================================
-
 elif current_page == 'baselines':
     st.markdown("## 📈 Baseline Tracker")
     
-    # Platform Selection with caching
+    # Platform Selection
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
@@ -529,7 +544,7 @@ elif current_page == 'baselines':
             st.rerun()
     
     with col3:
-        if st.button("🔄 Sync GitHub", use_container_width=True):
+        if st.button("📡 Sync GitHub", use_container_width=True):
             with st.spinner("Syncing..."):
                 synced = baseline_service.sync_from_github()
                 load_cached_baselines.clear()
@@ -543,23 +558,31 @@ elif current_page == 'baselines':
     with st.spinner(f"Loading {platform_filter} baselines..."):
         try:
             all_baselines = load_cached_baselines(platform_filter)
-            projects = get_baseline_projects(platform_filter)
         except Exception as e:
             st.error(f"Failed to load baselines: {e}")
             all_baselines = []
-            projects = []
     
-    # Overall Statistics
-    st.markdown("### 📊 Overview")
-    
+    # Overall Statistics - Compact
     if all_baselines:
+        # Group baselines by project first
+        baselines_by_project = {}
+        for baseline in all_baselines:
+            parts = baseline['name'].split('_')
+            if len(parts) >= 3:
+                project_code = parts[1]
+                project_full_name = get_full_project_name(project_code)
+                if project_full_name not in baselines_by_project:
+                    baselines_by_project[project_full_name] = []
+                baselines_by_project[project_full_name].append(baseline)
+        
+        # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric("📋 Total Baselines", len(all_baselines))
         
         with col2:
-            st.metric("🏢 Projects", len(projects))
+            st.metric("🏢 Projects", len(baselines_by_project))
         
         with col3:
             if all_baselines:
@@ -573,239 +596,161 @@ elif current_page == 'baselines':
         
         st.markdown("---")
         
-        # Project Filter
-        st.markdown("### 🔎 Filter by Project")
+        # Display baselines grouped by project
+        st.markdown(f"### 📂 Baselines by Project ({len(baselines_by_project)} projects)")
         
-        col1, col2 = st.columns([3, 1])
+        # Add custom CSS for compact view
+        st.markdown("""
+        <style>
+        .compact-baseline {
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         
-        with col1:
-            selected_project = st.selectbox(
-                "Select Project",
-                options=['All Projects'] + projects,
-                key='project_filter_selector'
-            )
-        
-        with col2:
-            show_all = st.checkbox("Show All", value=False, key='show_all_baselines')
-        
-        # Filter baselines
-        if selected_project != 'All Projects':
-            filtered_baselines = [
-                b for b in all_baselines 
-                if selected_project in b['name']
-            ]
-        else:
-            filtered_baselines = all_baselines
-        
-        # Limit display unless "Show All" is checked
-        display_baselines = filtered_baselines if show_all else filtered_baselines[:20]
-        
-        st.markdown("---")
-        
-        # Display baselines
-        st.markdown(f"### 📋 Baselines ({len(filtered_baselines)} total, showing {len(display_baselines)})")
-        
-        if not show_all and len(filtered_baselines) > 20:
-            st.info(f"ℹ️ Showing first 20 of {len(filtered_baselines)} baselines. Check 'Show All' to see more.")
-        
-        # Group by project for better organization
-        baselines_by_project = {}
-        for baseline in display_baselines:
-            parts = baseline['name'].split('_')
-            if len(parts) >= 3:
-                project = parts[1]
-                if project not in baselines_by_project:
-                    baselines_by_project[project] = []
-                baselines_by_project[project].append(baseline)
-        
-        # Display by project
-        for project, project_baselines in sorted(baselines_by_project.items()):
-                    
-            for baseline in project_baselines:
-                timestamp = _format_time(baseline['name'].split('_')[-1].replace('.json', ''))
+        # Display each project as a collapsible section
+        for project_name, project_baselines in sorted(baselines_by_project.items()):
+            with st.expander(
+                f"📁 {project_name} ({len(project_baselines)} baseline(s))",
+                expanded=False
+            ):
+                # Show project summary
+                total_failures_in_project = 0
+                for baseline in project_baselines:
+                    try:
+                        baseline_data = baseline_service.load(baseline['name'], platform=platform_filter)
+                        if baseline_data and 'failures' in baseline_data:
+                            total_failures_in_project += len(baseline_data['failures'])
+                    except:
+                        pass
                 
-                # Load baseline data first
-                try:
-                    baseline_data = baseline_service.load(baseline['name'], platform=platform_filter)
-                    has_data = baseline_data and 'failures' in baseline_data
-                    failure_count = len(baseline_data['failures']) if has_data else 0
-                except:
-                    has_data = False
-                    failure_count = 0
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.caption(f"📊 Total Failures: **{total_failures_in_project}**")
+                with col2:
+                    st.caption(f"📅 Latest: **{_format_time(project_baselines[0]['name'].split('_')[-1].replace('.json', ''))}**")
                 
-                # Create a container for each baseline
                 st.markdown("---")
                 
-                # Header row with name, metrics, and action buttons
-                col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 0.5])
+                # Baseline selector dropdown
+                baseline_options = [b['name'] for b in project_baselines]
+                selected_baseline_name = st.selectbox(
+                    "Select Baseline to View",
+                    options=baseline_options,
+                    format_func=lambda x: f"📅 {_format_time(x.split('_')[-1].replace('.json', ''))} ({x.split('_')[0]})",
+                    key=f"baseline_selector_{project_name}"
+                )
                 
-                with col1:
-                    st.markdown(f"**📄 {baseline['name']}**")
-                    st.caption(f"🕐 {timestamp}")
+                # Find the selected baseline
+                selected_baseline = next((b for b in project_baselines if b['name'] == selected_baseline_name), None)
                 
-                with col2:
-                    st.metric("❌ Failures", failure_count)
-                
-                with col3:
-                    view_key = f"view_state_{baseline['name']}"
-                    btn_key = f"view_btn_{baseline['name']}"
+                if selected_baseline:
+                    # Load baseline data
+                    try:
+                        baseline_data = baseline_service.load(selected_baseline['name'], platform=platform_filter)
+                        has_data = baseline_data and 'failures' in baseline_data
+                        failure_count = len(baseline_data['failures']) if has_data else 0
+                    except:
+                        has_data = False
+                        failure_count = 0
                     
-                    if btn_key not in st.session_state:
-                        st.session_state[view_key] = False
-                    
-                    if st.button("👁️ View Failures", key=btn_key, use_container_width=True):
-                        st.session_state[view_key] = not st.session_state[view_key]
-                
-                with col4:
-                    # Export button
-                    if has_data and failure_count > 0:
-                        failures = baseline_data.get('failures', [])
-                        df = pd.DataFrame(failures)
-                        csv = df.to_csv(index=False)
-                        st.download_button(
-                            "📥 Export",
-                            csv,
-                            file_name=f"{baseline['name']}_failures.csv",
-                            mime="text/csv",
-                            key=f"export_{baseline['name']}",
-                            use_container_width=True
-                        )
-                
-                with col5:
-                    if st.button("🗑️", key=f"delete_{baseline['name']}", help="Delete"):
-                        if admin_key:
-                            baseline_service.delete(baseline['name'], platform=platform_filter)
-                            st.success("✅ Deleted!")
-                            load_cached_baselines.clear()
-                            st.rerun()
-                        else:
-                            st.error("❌ Admin key required!")
-                
-                # Show failures if button clicked (directly visible, no expander)
-                if st.session_state.get(view_key, False):
                     st.markdown("---")
-                    st.markdown("### 📋 Failures")
                     
+                    # Compact info display
+                    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                    
+                    with col1:
+                        st.markdown(f"**📄 {selected_baseline['name'][:60]}**")
+                        st.caption(f"🕐 {_format_time(selected_baseline['name'].split('_')[-1].replace('.json', ''))}")
+                    
+                    with col2:
+                        st.metric("❌ Failures", failure_count)
+                    
+                    with col3:
+                        if has_data and failure_count > 0:
+                            failures = baseline_data.get('failures', [])
+                            df = pd.DataFrame(failures)
+                            csv = df.to_csv(index=False)
+                            st.download_button(
+                                "📥 CSV",
+                                csv,
+                                file_name=f"{selected_baseline['name']}_failures.csv",
+                                mime="text/csv",
+                                key=f"export_{selected_baseline['name']}",
+                                use_container_width=True
+                            )
+                    
+                    with col4:
+                        if st.button("🗑️", key=f"delete_{selected_baseline['name']}", help="Delete Baseline", use_container_width=True):
+                            if admin_key:
+                                baseline_service.delete(selected_baseline['name'], platform=platform_filter)
+                                st.success("✅ Deleted!")
+                                load_cached_baselines.clear()
+                                st.rerun()
+                            else:
+                                st.error("❌ Admin key required!")
+                    
+                    # View failures section
                     if has_data and failure_count > 0:
-                        failures = baseline_data.get('failures', [])
+                        st.markdown("---")
                         
-                        # Display based on platform
-                        if platform_filter == "provar":
-                            for i, f in enumerate(failures):
-                                with st.expander(f"{i+1}. {f.get('testcase', 'Unknown')}", expanded=False):
-                                    st.write("**Error:**", f.get('error', 'N/A'))
-                                    st.code(f.get('details', 'No details'), language="text")
+                        view_key = f"show_failures_{selected_baseline['name']}"
                         
-                        else:  # automation_api
-                            for i, f in enumerate(failures):
-                                with st.expander(f"{i+1}. {f.get('test_name', 'Unknown')}", expanded=False):
-                                    st.write("**Error:**", f.get('error_summary', 'N/A'))
-                                    st.code(f.get('error_details', 'No details'), language="text")
+                        if st.button(f"👁️ View {failure_count} Failures", key=f"view_btn_{selected_baseline['name']}", use_container_width=True):
+                            st.session_state[view_key] = not st.session_state.get(view_key, False)
+                        
+                        if st.session_state.get(view_key, False):
+                            st.markdown("### 📋 Failure Details")
+                            
+                            failures = baseline_data.get('failures', [])
+                            
+                            # Display based on platform
+                            if platform_filter == "provar":
+                                for i, f in enumerate(failures):
+                                    with st.expander(f"{i+1}. {f.get('testcase', 'Unknown')}", expanded=False):
+                                        st.write("**Error:**", f.get('error', 'N/A'))
+                                        st.write("**Browser:**", f.get('webBrowserType', 'N/A'))
+                                        st.code(f.get('details', 'No details'), language="text")
+                            
+                            else:  # automation_api
+                                for i, f in enumerate(failures):
+                                    icon = "🟡" if f.get('is_skipped') else "🔴"
+                                    with st.expander(f"{icon} {i+1}. {f.get('test_name', 'Unknown')}", expanded=False):
+                                        st.write("**Error:**", f.get('error_summary', 'N/A'))
+                                        st.write("**Spec:**", f.get('spec_file', 'N/A'))
+                                        st.code(f.get('error_details', 'No details'), language="text")
+                            
+                            if st.button("❌ Close Failures", key=f"close_{selected_baseline['name']}"):
+                                st.session_state[view_key] = False
+                                st.rerun()
+                
+                # Show all baselines in this project (compact list)
+                st.markdown("---")
+                st.markdown("**📜 All Baselines in this Project:**")
+                
+                for idx, baseline in enumerate(project_baselines):
+                    timestamp = _format_time(baseline['name'].split('_')[-1].replace('.json', ''))
                     
-                    if st.button("❌ Close", key=f"close_{baseline['name']}"):
-                        st.session_state[view_key] = False
-                        st.rerun()
-            
-            st.markdown("---")
-
-                # Bulk actions
-        st.markdown("### 🛠️ Bulk Actions")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("📥 Export All Metadata", use_container_width=True):
-                metadata_list = []
-                for baseline in filtered_baselines:
-                    metadata_list.append({
-                        'name': baseline['name'],
-                        'platform': platform_filter,
-                        'timestamp': _format_time(baseline['name'].split('_')[-1].replace('.json', ''))
-                    })
-                
-                df = pd.DataFrame(metadata_list)
-                csv = df.to_csv(index=False)
-                
-                st.download_button(
-                    "📥 Download CSV",
-                    csv,
-                    file_name=f"{platform_filter}_baselines_metadata.csv",
-                    mime="text/csv"
-                )
-        
-        with col2:
-            if st.button("🔄 Clear Cache", use_container_width=True):
-                load_cached_baselines.clear()
-                get_baseline_projects.clear()
-                st.success("✅ Cache cleared!")
-                st.rerun()
-        
-        with col3:
-            if st.button("📊 View Statistics", use_container_width=True):
-                st.session_state.show_stats = not st.session_state.get('show_stats', False)
-        
-        # Statistics panel
-        if st.session_state.get('show_stats', False):
-            st.markdown("---")
-            st.markdown("### 📊 Detailed Statistics")
-            
-            total_failures = 0
-            baseline_details = []
-            
-            for baseline in filtered_baselines[:50]:
-                try:
-                    baseline_data = baseline_service.load(baseline['name'], platform=platform_filter)
-                    if baseline_data and 'failures' in baseline_data:
-                        failure_count = len(baseline_data['failures'])
-                        total_failures += failure_count
-                        baseline_details.append({
-                            'name': baseline['name'],
-                            'failures': failure_count,
-                            'timestamp': _format_time(baseline['name'].split('_')[-1].replace('.json', ''))
-                        })
-                except:
-                    continue
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("📊 Total Failures (Top 50)", total_failures)
-            
-            with col2:
-                if baseline_details:
-                    avg_failures = total_failures / len(baseline_details)
-                    st.metric("📈 Avg Failures", f"{avg_failures:.1f}")
-            
-            with col3:
-                if baseline_details:
-                    max_failures = max(b['failures'] for b in baseline_details)
-                    st.metric("🔥 Max Failures", max_failures)
-            
-            # Chart
-            if baseline_details:
-                st.markdown("#### 📈 Failure Trend (Top 50)")
-                
-                df_chart = pd.DataFrame(baseline_details)
-                
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=df_chart['timestamp'],
-                    y=df_chart['failures'],
-                    mode='lines+markers',
-                    name='Failures',
-                    line=dict(color='#FF4B4B', width=2),
-                    marker=dict(size=8)
-                ))
-                
-                fig.update_layout(
-                    title='Failure Trend Over Time',
-                    xaxis_title='Timestamp',
-                    yaxis_title='Number of Failures',
-                    height=400,
-                    hovermode='x unified'
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
+                    try:
+                        baseline_data = baseline_service.load(baseline['name'], platform=platform_filter)
+                        failure_count = len(baseline_data['failures']) if baseline_data and 'failures' in baseline_data else 0
+                    except:
+                        failure_count = 0
+                    
+                    col1, col2, col3 = st.columns([4, 1, 1])
+                    
+                    with col1:
+                        st.caption(f"{idx+1}. 📅 {timestamp}")
+                    
+                    with col2:
+                        st.caption(f"❌ {failure_count}")
+                    
+                    with col3:
+                        if baseline['name'] == selected_baseline_name:
+                            st.caption("✅ **Selected**")
+                        else:
+                            st.caption("")
     
     else:
         st.info(f"ℹ️ No baselines found for {platform_filter}")
@@ -829,7 +774,6 @@ elif current_page == 'baselines':
             if st.button("🔧 Go to AutomationAPI Reports", use_container_width=True, type="primary"):
                 st.session_state.current_page = 'automation_api'
                 st.rerun()
-
 # ===================================================================
 # SETTINGS PAGE
 # ===================================================================
