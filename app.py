@@ -118,25 +118,13 @@ def extract_full_project_name(baseline_name):
 # Constants
 APP_VERSION = "4.0.0"
 # Project name mapping - maps short codes to full names
-PROJECT_NAME_MAPPING = {
-   
-}
+
 
 # Reverse mapping for saving baselines
 PROJECT_CODE_MAPPING = {v: k for k, v in PROJECT_NAME_MAPPING.items()}
 
-def get_full_project_name(short_code):
-    """Convert short project code to full name"""
-    return PROJECT_NAME_MAPPING.get(short_code, short_code)
 
-def get_project_code(full_name):
-    """Convert full project name to short code"""
-    return PROJECT_CODE_MAPPING.get(full_name, full_name)
 # Project name mapping - maps short codes to full names
-PROJECT_NAME_MAPPING = {
-    
-}
-
 
 # ===================================================================
 # CACHING AND SESSION STATE INITIALIZATION
@@ -602,10 +590,11 @@ elif current_page == 'baselines':
         # Group baselines by project first
         baselines_by_project = {}
         for baseline in all_baselines:
-            parts = baseline['name'].split('_')
-            if len(parts) >= 3:
-                project_code = parts[1]
-                st.markdown(f"### 📄 Baseline File: `{baseline['name']}`")
+            project_name = baseline['name']  # use actual file name
+
+            if project_name not in baselines_by_project:
+                baselines_by_project[project_name] = []
+            baselines_by_project[project_name].append(baseline)
 
         
         # Summary metrics
@@ -1404,17 +1393,28 @@ elif current_page == 'automation_api':
                                     # Compare with baseline
                                     baseline_failures = baseline_data.get('failures', [])
                                     # Create signature set from baseline
+                                    def automation_failure_signature(f):
+                                        interaction = f.get("interaction", {}) or {}
+                                        return "|".join([
+                                            f.get("spec_file", ""),
+                                            f.get("test_name", ""),
+                                            f.get("error_summary", ""),
+                                            str(interaction.get("ActualValue", "")),
+                                            str(interaction.get("ExpectedValue", "")),
+                                        ])
+
+
                                     baseline_sigs = set()
                                     for b in baseline_failures:
-                                        sig = f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}"
-                                        baseline_sigs.add(sig)
-                                    # Compare current failures
+                                        baseline_sigs.add(automation_failure_signature(b))
+
                                     for failure in real_failures:
-                                        sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}"
+                                        sig = automation_failure_signature(failure)
                                         if sig in baseline_sigs:
                                             existing_f.append(failure)
                                         else:
                                             new_f.append(failure)
+
                                 else:           
                                     # Baseline exists but has no failures
                                     new_f = real_failures
