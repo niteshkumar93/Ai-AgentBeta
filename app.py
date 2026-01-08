@@ -650,12 +650,19 @@ elif current_page == 'baselines':
                     
                     with col3:
                         # ✅ NEW: View Failures Button
-                        view_key = f"view_{baseline['name']}"
-                        if st.button("👁️ View Failures", key=view_key, use_container_width=True):
-                            current = st.session_state.get(view_key, False)
-                            st.session_state[view_key] = not current
-                            st.rerun()
-                    
+                        view_key = f"view_state_{baseline['name']}"
+                        btn_key = f"view_btn_{baseline['name']}"
+
+                        if btn_key not in st.session_state:
+                            st.session_state[view_key] = False
+
+                        if st.button("👁️ View Failures", key=btn_key, use_container_width=True):
+                            st.session_state[view_key] = not st.session_state[view_key]
+
+                        if st.session_state[view_key]:
+                            st.markdown("---")
+                            st.markdown("### 📋 Failures")
+      
                     with col4:
                         if st.button("🗑️", key=f"delete_{baseline['name']}", help="Delete"):
                             if admin_key:
