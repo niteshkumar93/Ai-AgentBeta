@@ -84,35 +84,6 @@ except ImportError:
     API_MULTI_BASELINE_AVAILABLE = False
 
 # ===================================================================
-def extract_full_project_name(baseline_name):
-    """
-    Extract the full project name from baseline filename.
-    Format: Platform_Project_Type_timestamp.json
-    Example: Smoke_LS_Windows_provar_baseline_20260102_083306.json
-    Returns: "Smoke LS Windows" (everything before '_provar_baseline' or '_automation_api_baseline')
-    """
-    # Remove .json extension
-    name = baseline_name.replace('.json', '')
-    
-    # Split by underscore
-    parts = name.split('_')
-    
-    # Find where the baseline marker starts
-    project_parts = []
-    for i, part in enumerate(parts):
-        # Stop when we hit 'provar', 'automation', or 'baseline'
-        if part.lower() in ['provar', 'automation', 'baseline', 'api']:
-            break
-        project_parts.append(part)
-    
-    # Join the parts to create full project name
-    full_name = ' '.join(project_parts)
-    
-    # If we got nothing, return the first part at least
-    if not full_name:
-        full_name = parts[0] if parts else 'Unknown'
-    
-    return full_name
 
 # ===================================================================
 # Constants
