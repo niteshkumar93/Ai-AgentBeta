@@ -114,12 +114,6 @@ def extract_provar_project_from_baseline(filename: str) -> str:
     """
     name = filename.replace(".json", "")
 
-    if not name.lower().startswith("provar_"):
-        return "UNKNOWN_PROJECT"
-
-    name = name[len("provar_"):]  # remove prefix
-    parts = name.split("_")
-
     project_parts = []
     for part in parts:
         if part.lower() in {"provar", "baseline"}:
