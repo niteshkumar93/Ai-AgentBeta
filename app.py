@@ -625,85 +625,91 @@ elif current_page == 'baselines':
             for baseline in project_baselines:
                 timestamp = _format_time(baseline['name'].split('_')[-1].replace('.json', ''))
                 
-                with st.expander(f"📄 {baseline['name']} | 🕐 {timestamp}", expanded=False):
+                # Load baseline data first
+                try:
+                    baseline_data = baseline_service.load(baseline['name'], platform=platform_filter)
+                    has_data = baseline_data and 'failures' in baseline_data
+                    failure_count = len(baseline_data['failures']) if has_data else 0
+                except:
+                    has_data = False
+                    failure_count = 0
+                
+                # Create a container for each baseline
+                st.markdown("---")
+                
+                # Header row with name, metrics, and action buttons
+                col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 0.5])
+                
+                with col1:
+                    st.markdown(f"**📄 {baseline['name']}**")
+                    st.caption(f"🕐 {timestamp}")
+                
+                with col2:
+                    st.metric("❌ Failures", failure_count)
+                
+                with col3:
+                    view_key = f"view_state_{baseline['name']}"
+                    btn_key = f"view_btn_{baseline['name']}"
                     
-                    # Load baseline data
-                    try:
-                        baseline_data = baseline_service.load(baseline['name'], platform=platform_filter)
-                        has_data = baseline_data and 'failures' in baseline_data
-                        failure_count = len(baseline_data['failures']) if has_data else 0
-                    except:
-                        has_data = False
-                        failure_count = 0
+                    if btn_key not in st.session_state:
+                        st.session_state[view_key] = False
                     
-                    # Metrics row
-                    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-                    
-                    with col1:
-                        st.metric("❌ Failures", failure_count)
-                    
-                    with col2:
-                        st.caption(f"📅 {timestamp}")
-                    
-                    with col3:
-                        view_key = f"view_state_{baseline['name']}"
-                        btn_key = f"view_btn_{baseline['name']}"
-
-                        if btn_key not in st.session_state:
-                            st.session_state[view_key] = False
-
-                        if st.button("👁️ View Failures", key=btn_key, use_container_width=True):
-                            st.session_state[view_key] = not st.session_state[view_key]
-                    
-                    with col4:
-                        if st.button("🗑️", key=f"delete_{baseline['name']}", help="Delete"):
-                            if admin_key:
-                                baseline_service.delete(baseline['name'], platform=platform_filter)
-                                st.success("✅ Deleted!")
-                                load_cached_baselines.clear()
-                                st.rerun()
-                            else:
-                                st.error("❌ Admin key required!")
-                    
-                    # Show failures if button clicked
-                    if st.session_state.get(view_key, False):
-                        st.markdown("---")
-                        st.markdown("### 📋 Failures")
-                        
-                        if has_data and failure_count > 0:
-                            failures = baseline_data.get('failures', [])
-                            
-                            # Display based on platform
-                            if platform_filter == "provar":
-                                for i, f in enumerate(failures):
-                                    with st.expander(f"{i+1}. {f.get('testcase', 'Unknown')}", expanded=False):
-                                        st.write("**Error:**", f.get('error', 'N/A'))
-                                        st.code(f.get('details', 'No details'), language="text")
-                            
-                            else:  # automation_api
-                                for i, f in enumerate(failures):
-                                    with st.expander(f"{i+1}. {f.get('test_name', 'Unknown')}", expanded=False):
-                                        st.write("**Error:**", f.get('error_summary', 'N/A'))
-                                        st.code(f.get('error_details', 'No details'), language="text")
-                            
-                            # Export
-                            df = pd.DataFrame(failures)
-                            csv = df.to_csv(index=False)
-                            st.download_button(
-                                "📥 Download CSV",
-                                csv,
-                                file_name=f"{baseline['name']}_failures.csv",
-                                mime="text/csv",
-                                key=f"export_{baseline['name']}"
-                            )
-                        
-                        if st.button("❌ Close", key=f"close_{baseline['name']}"):
-                            st.session_state[view_key] = False
+                    if st.button("👁️ View Failures", key=btn_key, use_container_width=True):
+                        st.session_state[view_key] = not st.session_state[view_key]
+                
+                with col4:
+                    # Export button
+                    if has_data and failure_count > 0:
+                        failures = baseline_data.get('failures', [])
+                        df = pd.DataFrame(failures)
+                        csv = df.to_csv(index=False)
+                        st.download_button(
+                            "📥 Export",
+                            csv,
+                            file_name=f"{baseline['name']}_failures.csv",
+                            mime="text/csv",
+                            key=f"export_{baseline['name']}",
+                            use_container_width=True
+                        )
+                
+                with col5:
+                    if st.button("🗑️", key=f"delete_{baseline['name']}", help="Delete"):
+                        if admin_key:
+                            baseline_service.delete(baseline['name'], platform=platform_filter)
+                            st.success("✅ Deleted!")
+                            load_cached_baselines.clear()
                             st.rerun()
+                        else:
+                            st.error("❌ Admin key required!")
+                
+                # Show failures if button clicked (directly visible, no expander)
+                if st.session_state.get(view_key, False):
+                    st.markdown("---")
+                    st.markdown("### 📋 Failures")
+                    
+                    if has_data and failure_count > 0:
+                        failures = baseline_data.get('failures', [])
+                        
+                        # Display based on platform
+                        if platform_filter == "provar":
+                            for i, f in enumerate(failures):
+                                with st.expander(f"{i+1}. {f.get('testcase', 'Unknown')}", expanded=False):
+                                    st.write("**Error:**", f.get('error', 'N/A'))
+                                    st.code(f.get('details', 'No details'), language="text")
+                        
+                        else:  # automation_api
+                            for i, f in enumerate(failures):
+                                with st.expander(f"{i+1}. {f.get('test_name', 'Unknown')}", expanded=False):
+                                    st.write("**Error:**", f.get('error_summary', 'N/A'))
+                                    st.code(f.get('error_details', 'No details'), language="text")
+                    
+                    if st.button("❌ Close", key=f"close_{baseline['name']}"):
+                        st.session_state[view_key] = False
+                        st.rerun()
             
             st.markdown("---")
-        
-        # Bulk actions
+
+                # Bulk actions
         st.markdown("### 🛠️ Bulk Actions")
         
         col1, col2, col3 = st.columns(3)
