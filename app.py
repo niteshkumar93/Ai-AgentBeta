@@ -1529,10 +1529,7 @@ elif current_page == 'automation_api':
                                     skipped_count = len([f for f in failures if f.get('is_skipped')])
                                     
                                     with st.expander(
-                                        f"🆕 {spec} — {len(failures)} failure(s) "
-                                        f"(🔴 {real_count} real, 🟡 {skipped_count} skipped)",
-                                        expanded=False
-                                    ):
+                                        f"🆕 {spec} — {len(failures)} failure(s) " ):
                                         for i, failure in enumerate(failures):
                                             icon = "🟡" if failure.get('is_skipped') else "🔴"
                                             
