@@ -17,6 +17,8 @@ def automation_failure_signature(failure: dict) -> str:
         failure.get("spec_file", ""),
         failure.get("test_name", ""),
         failure.get("error_summary", ""),
+        failure.get("classname", ""),
+        str(failure.get("execution_time", "")),
         str(interaction.get("ActualValue", "")),
         str(interaction.get("ExpectedValue", "")),
     ])

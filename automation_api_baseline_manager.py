@@ -180,17 +180,30 @@ def _save_to_github_storage(project_name: str, failures: List[Dict]):
 
 
 def compare_with_baseline(project_name: str, current_failures: List[Dict]):
-    """
-    Compare current failures with baseline.
-    Returns: (new_failures, existing_failures)
-    """
     baseline = load_baseline(project_name)
     
-    # Create signature for baseline failures (spec + test_name + error)
+    # Create signature with MORE unique identifiers
     baseline_sigs = {
-        f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}"
+        f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}|{b.get('classname', '')}|{b.get('execution_time', '')}"
         for b in baseline
     }
+    
+    new_failures = []
+    existing_failures = []
+    
+    for failure in current_failures:
+        if failure.get("_no_failures"):
+            continue
+        
+        # Use SAME signature format
+        sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}|{failure.get('classname', '')}|{failure.get('execution_time', '')}"
+        
+        if sig in baseline_sigs:
+            existing_failures.append(failure)
+        else:
+            new_failures.append(failure)
+    
+    return new_failures, existing_failures
     
     new_failures = []
     existing_failures = []
