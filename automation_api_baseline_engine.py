@@ -9,20 +9,6 @@ import json
 from datetime import datetime
 from typing import List, Dict, Optional
 
-
-def automation_failure_signature(failure: dict) -> str:
-    interaction = failure.get("interaction", {}) or {}
-
-    return "|".join([
-        failure.get("spec_file", ""),
-        failure.get("test_name", ""),
-        failure.get("error_summary", ""),
-        failure.get("classname", ""),
-        str(failure.get("execution_time", "")),
-        str(interaction.get("ActualValue", "")),
-        str(interaction.get("ExpectedValue", "")),
-    ])
-
 # -------------------------------------------------
 # CONFIGURATION
 # -------------------------------------------------
