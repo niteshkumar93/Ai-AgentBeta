@@ -84,6 +84,23 @@ except ImportError:
     API_MULTI_BASELINE_AVAILABLE = False
 
 # ===================================================================
+def extract_project_from_baseline_name(baseline_name: str) -> str:
+    """
+    Extract logical project name from baseline filename.
+
+    Example:
+    AutomationAPI_Flexi1_automation_api_baseline_20260105_164029.json
+    -> Flexi1
+    """
+    name = baseline_name.replace(".json", "")
+    parts = name.split("_")
+
+    # Expected pattern:
+    # AutomationAPI_<PROJECT>_automation_api_baseline_<timestamp>
+    try:
+        return parts[1]
+    except IndexError:
+        return "UNKNOWN_PROJECT"
 
 # ===================================================================
 # Constants
@@ -552,14 +569,26 @@ elif current_page == 'baselines':
     if all_baselines:
         # Group baselines by project first
         baselines_by_project = {}
+
         for baseline in all_baselines:
-            project_name = baseline['name']  # use actual file name
+            project_name = extract_project_from_baseline_name(baseline['name'])
+
+            if project_name not in baselines_by_project:
+                baselines_by_project[project_name] = []
+
+            baselines_by_project[project_name].append(baseline)
+
 
             if project_name not in baselines_by_project:
                 baselines_by_project[project_name] = []
             baselines_by_project[project_name].append(baseline)
 
-        
+        for project in baselines_by_project:
+            baselines_by_project[project].sort(
+                key=lambda b: b['name'],
+                reverse=True
+            )
+
         # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
         
