@@ -105,6 +105,33 @@ def extract_project_from_baseline_name(baseline_name: str) -> str:
 # ===================================================================
 # Constants
 APP_VERSION = "4.0.0"
+def extract_provar_project_from_baseline(filename: str) -> str:
+    """
+    Extract EXACT Provar project name from baseline filename.
+
+    Example:
+    Provar_Smoke_CC_Windows_provar_baseline_20260105_083448.json
+    → Smoke_CC_Windows
+    """
+    name = filename.replace(".json", "")
+    parts = name.split("_")
+
+    try:
+        # Remove platform prefix
+        if parts[0].lower() == "provar":
+            parts = parts[1:]
+
+        # Stop at baseline marker
+        stop_words = {"provar", "baseline"}
+        project_parts = []
+        for part in parts:
+            if part.lower() in stop_words:
+                break
+            project_parts.append(part)
+
+        return "_".join(project_parts) if project_parts else "UNKNOWN_PROJECT"
+    except Exception:
+        return "UNKNOWN_PROJECT"
 
 # ===================================================================
 # CACHING AND SESSION STATE INITIALIZATION
@@ -570,13 +597,16 @@ elif current_page == 'baselines':
         # Group baselines by project first
         baselines_by_project = {}
 
+        baselines_by_project = {}
+
         for baseline in all_baselines:
-            project_name = extract_project_from_baseline_name(baseline['name'])
+            if platform_filter == "provar":
+                project_name = extract_provar_project_from_baseline(baseline["name"])
+            else:
+                project_name = baseline["project"] if "project" in baseline else baseline["name"]
 
-            if project_name not in baselines_by_project:
-                baselines_by_project[project_name] = []
+            baselines_by_project.setdefault(project_name, []).append(baseline)
 
-            baselines_by_project[project_name].append(baseline)
 
 
             if project_name not in baselines_by_project:
@@ -890,7 +920,8 @@ elif current_page == 'provar':
                 
                 if failures:
                     project_path = failures[0].get("projectCachePath", "")
-                    detected_project = detect_project(project_path, xml_file.name)
+                    detected_project = failures[0].get("project", xml_file.name.replace(".xml", ""))
+
                     
                     # Capture timestamp from first failure
                     execution_time = failures[0].get("timestamp", "Unknown")
