@@ -620,8 +620,7 @@ elif current_page == 'baselines':
         
         # Display by project
         for project, project_baselines in sorted(baselines_by_project.items()):
-            st.markdown(f"#### 🏢 Project: {project}")
-            
+                    
             for baseline in project_baselines:
                 timestamp = _format_time(baseline['name'].split('_')[-1].replace('.json', ''))
                 
