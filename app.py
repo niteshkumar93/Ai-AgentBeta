@@ -117,14 +117,6 @@ def extract_full_project_name(baseline_name):
 # ===================================================================
 # Constants
 APP_VERSION = "4.0.0"
-# Project name mapping - maps short codes to full names
-
-
-# Reverse mapping for saving baselines
-PROJECT_CODE_MAPPING = {v: k for k, v in PROJECT_NAME_MAPPING.items()}
-
-
-# Project name mapping - maps short codes to full names
 
 # ===================================================================
 # CACHING AND SESSION STATE INITIALIZATION
