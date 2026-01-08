@@ -598,24 +598,17 @@ elif current_page == 'baselines':
         # Group baselines by project first
         baselines_by_project = {}
 
-        
         for baseline in all_baselines:
             if platform_filter == "provar":
                 project_name = extract_provar_project_from_baseline(baseline["name"])
             else:
-                if platform_filter == "automation_api":
-                    project_name = baseline.get("project")
-                    if not project_name:
-                       project_name = extract_project_from_baseline_name(baseline["name"])
+                project_name = baseline.get("project")
+                if not project_name:
+                    project_name = extract_project_from_baseline_name(baseline["name"])
 
-
+            # ✅ Append ONLY ONCE
             baselines_by_project.setdefault(project_name, []).append(baseline)
 
-
-
-            if project_name not in baselines_by_project:
-                baselines_by_project[project_name] = []
-            baselines_by_project[project_name].append(baseline)
 
         for project in baselines_by_project:
             def extract_ts(name):
