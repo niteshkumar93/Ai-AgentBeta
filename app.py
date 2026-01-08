@@ -972,17 +972,35 @@ elif current_page == 'provar':
                                 
                                 if baseline_data and baseline_data.get('failures'):
                                     baseline_failures = baseline_data.get('failures', [])
-                                    baseline_sigs = set()
-                                    
+                                    baseline_sigs = []  # Changed from set to list to store all signatures
+                                    for i, b in enumerate(baseline_failures):
+                                        sig = f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}|{i}"
+                                        baseline_sigs.append(sig)
+
+                                    # Create a set for faster lookup but keep count
+                                    baseline_sig_counts = {}
                                     for b in baseline_failures:
-                                        sig = f"{b.get('testcase')}|{b.get('error')}"
-                                        baseline_sigs.add(sig)
-                                    
-                                    for failure in normalized:
-                                        sig = f"{failure.get('testcase')}|{failure.get('error')}"
-                                        if sig in baseline_sigs:
+                                        base_sig = f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}"
+                                        baseline_sig_counts[base_sig] = baseline_sig_counts.get(base_sig, 0) + 1
+
+                                    # Track how many of each signature we've seen in current failures
+                                    current_sig_counts = {}
+
+                                    for failure in real_failures:
+                                        base_sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}"
+                                        
+                                        # Count how many times we've seen this signature
+                                        current_count = current_sig_counts.get(base_sig, 0)
+                                        current_sig_counts[base_sig] = current_count + 1
+                                        
+                                        # Compare: if we've seen this signature fewer times in baseline, it's new
+                                        baseline_count = baseline_sig_counts.get(base_sig, 0)
+                                        
+                                        if current_count < baseline_count:
+                                            # This instance exists in baseline
                                             existing_f.append(failure)
                                         else:
+                                            # This is a NEW instance (baseline has fewer instances)
                                             new_f.append(failure)
                                     
                                     baseline_compared = True
@@ -1321,7 +1339,7 @@ elif current_page == 'automation_api':
                                     baseline_sigs = set()
                                     
                                     for b in baseline_failures:
-                                        sig = f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}"
+                                        sig = f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}|{b.get('classname', '')}"
                                         baseline_sigs.add(sig)
                                     
                                     for failure in real_failures:
@@ -1451,7 +1469,7 @@ elif current_page == 'automation_api':
                                                 baseline_failures = baseline_data.get('failures', [])
                                                 baseline_sigs = set()
                                                 for b in baseline_failures:
-                                                    sig = f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}"
+                                                    sig = f"{b.get('spec_file')}|{b.get('test_name')}|{b.get('error_summary', '')}|{b.get('classname', '')}"
                                                     baseline_sigs.add(sig)
                                                 
                                                 new_f = []
