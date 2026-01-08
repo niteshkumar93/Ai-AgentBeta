@@ -1343,7 +1343,7 @@ elif current_page == 'automation_api':
                                         baseline_sigs.add(sig)
                                     
                                     for failure in real_failures:
-                                        sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}"
+                                        sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}|{b.get('classname', '')}"
                                         if sig in baseline_sigs:
                                             existing_f.append(failure)
                                         else:
@@ -1476,7 +1476,7 @@ elif current_page == 'automation_api':
                                                 existing_f = []
                                                 
                                                 for failure in result['all_failures']:
-                                                    sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}"
+                                                    sig = f"{failure.get('spec_file')}|{failure.get('test_name')}|{failure.get('error_summary', '')}|{b.get('classname', '')}"
                                                     if sig in baseline_sigs:
                                                         existing_f.append(failure)
                                                     else:
