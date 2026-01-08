@@ -119,10 +119,7 @@ def extract_full_project_name(baseline_name):
 APP_VERSION = "4.0.0"
 # Project name mapping - maps short codes to full names
 PROJECT_NAME_MAPPING = {
-    'LS': 'Lightning Sales',
-    'CC': 'Classic Console',
-    'CS': 'Classic Sales',
-    'LC': 'Lightning Console',
+   
 }
 
 # Reverse mapping for saving baselines
