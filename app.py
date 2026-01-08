@@ -109,18 +109,29 @@ def extract_provar_project_from_baseline(filename: str) -> str:
     """
     Extract EXACT Provar project name from baseline filename.
 
+    Example:
     Provar_Smoke_CC_Windows_provar_baseline_20260105_083448.json
-    -> Smoke_CC_Windows
+    → Smoke_CC_Windows
     """
     name = filename.replace(".json", "")
+    parts = name.split("_")
 
-    project_parts = []
-    for part in parts:
-        if part.lower() in {"provar", "baseline"}:
-            break
-        project_parts.append(part)
+    try:
+        # Remove platform prefix
+        if parts[0].lower() == "provar":
+            parts = parts[1:]
 
-    return "_".join(project_parts) if project_parts else "UNKNOWN_PROJECT"
+        # Stop at baseline marker
+        stop_words = {"provar", "baseline"}
+        project_parts = []
+        for part in parts:
+            if part.lower() in stop_words:
+                break
+            project_parts.append(part)
+
+        return "_".join(project_parts) if project_parts else "UNKNOWN_PROJECT"
+    except Exception:
+        return "UNKNOWN_PROJECT"
 
 
 # ===================================================================
