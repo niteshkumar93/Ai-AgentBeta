@@ -235,13 +235,37 @@ def safe_extract_failures(uploaded_file):
         return []
 
 def detect_project(path: str, filename: str):
+    """
+    Improved project detection that checks both path and filename
+    Returns the project name or UNKNOWN_PROJECT
+    """
+    # First, check if filename is generic (like "JUnit (39).xml")
+    if filename.startswith("JUnit") and "(" in filename and ")" in filename:
+        # This is a generic name, rely on path only
+        if path:
+            for p in KNOWN_PROJECTS:
+                if f"/{p}" in path or f"\\{p}" in path or p in path:
+                    return p
+        return "UNKNOWN_PROJECT"
+    
+    # Check path first (most reliable)
+    if path:
+        for p in KNOWN_PROJECTS:
+            if f"/{p}" in path or f"\\{p}" in path or p in path:
+                return p
+    
+    # Check filename
     for p in KNOWN_PROJECTS:
-        if path and (f"/{p}" in path or f"\\{p}" in path):
-            return p
         if p.lower() in filename.lower():
             return p
+    
+    # Special cases
     if "datetime" in filename.lower():
         return "Date_Time"
+    
+    if "hybrid" in filename.lower():
+        return "Hybrid0"
+    
     return "UNKNOWN_PROJECT"
 
 def shorten_project_cache_path(path):
@@ -931,10 +955,43 @@ elif current_page == 'provar':
                 status_text.text(f"Processing {xml_file.name}... ({idx + 1}/{len(uploaded_files)})")
                 
                 failures = safe_extract_failures(xml_file)
-                
+
                 if failures:
+                    detected_project = None
                     project_path = failures[0].get("projectCachePath", "")
-                    detected_project = failures[0].get("project", xml_file.name.replace(".xml", ""))
+                    
+                   # Method 1: Use "project" field from XML if available
+                    if failures[0].get("project") and failures[0].get("project") != "Unknown":
+                        detected_project = failures[0].get("project")
+                        print(f"✅ Project from XML field: {detected_project}")
+                    
+                    # Method 2: Extract from projectCachePath
+                    if not detected_project and project_path:
+                        for known_proj in KNOWN_PROJECTS:
+                            if known_proj in project_path:
+                                detected_project = known_proj
+                                print(f"✅ Project from path: {detected_project}")
+                                break
+                    
+                    # Method 3: Use detect_project helper
+                    if not detected_project:
+                        detected_project = detect_project(project_path, xml_file.name)
+                        print(f"✅ Project from detect_project: {detected_project}")
+                    
+                    # Method 4: Last resort - use filename if meaningful
+                    if not detected_project or detected_project == "UNKNOWN_PROJECT":
+                        filename = xml_file.name.replace(".xml", "")
+                        # Only use filename if it's not a generic pattern
+                        if not (filename.startswith("JUnit") and "(" in filename):
+                            detected_project = filename
+                        else:
+                            detected_project = "UNKNOWN_PROJECT"
+                    
+                    print(f"📁 Final detected project: {detected_project} (from {xml_file.name})")
+                    
+                    # Capture timestamp from first failure
+                    execution_time = failures[0].get("timestamp", "Unknown")
+                    
 
                     
                     # Capture timestamp from first failure

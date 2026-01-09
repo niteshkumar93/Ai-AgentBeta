@@ -71,7 +71,7 @@ def extract_failed_tests(xml_file) -> List[Dict]:
             })
 
     # --------------------------------------------------
-    # ZERO FAILURE HANDLING (VERY IMPORTANT)
+    # ZERO FAILURE HANDLING 
     # --------------------------------------------------
     if not failures:
         return [{
