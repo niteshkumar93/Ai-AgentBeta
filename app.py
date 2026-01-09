@@ -1844,8 +1844,8 @@ elif current_page == 'automation_api':
                         st.markdown("### 📋 All Failures (Grouped by Spec)")
                         
                         for spec_name, spec_failures in result['grouped_failures'].items():
-                            st.markdown(f"### 📋 Spec: `{spec_name}`")
-                            st.caption(f"{len(spec_failures)} failure(s) in this spec")
+                            with st.expander(f"📋 Spec: `{spec_name}`", expanded=True):
+                                st.caption(f"{len(spec_failures)} failure(s) in this spec")
                             
                             for i, failure in enumerate(spec_failures):
                                 # Icon based on type
