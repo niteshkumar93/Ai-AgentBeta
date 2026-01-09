@@ -1844,7 +1844,18 @@ elif current_page == 'automation_api':
                         st.markdown("### 📋 All Failures (Grouped by Spec)")
                         
                         for spec_name, spec_failures in result['grouped_failures'].items():
-                            with st.expander(f"📋 Spec: `{spec_name}`", expanded=True):
+                            # Count real vs skipped failures
+                            real_count = sum(1 for f in spec_failures if not f.get('is_skipped', False))
+                            skipped_count = len(spec_failures) - real_count
+                            
+                            # Build header with counts
+                            header = f"### 📋 Spec: {spec_name}"
+                            if real_count > 0:
+                                header += f" 🔴 {real_count}"
+                            if skipped_count > 0:
+                                header += f" 🟡 {skipped_count}"
+                            
+                            with st.expander(header, expanded=True):
                                 st.caption(f"{len(spec_failures)} failure(s) in this spec")
                             
                                 for i, failure in enumerate(spec_failures):
