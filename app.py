@@ -1847,86 +1847,86 @@ elif current_page == 'automation_api':
                             with st.expander(f"📋 Spec: `{spec_name}`", expanded=True):
                                 st.caption(f"{len(spec_failures)} failure(s) in this spec")
                             
-                            for i, failure in enumerate(spec_failures):
-                                # Icon based on type
-                                icon = "🟡" if failure['is_skipped'] else "🔴"
-                                failure_class = "skipped-failure" if failure['is_skipped'] else "real-failure"
-                                
-                                with st.expander(
-                                    f"{icon} {i+1}. {failure['test_name']} ({failure['execution_time']}s)",
-                                    expanded=False
-                                ):
-                                    st.markdown(f"<div class='{failure_class}'>", unsafe_allow_html=True)
+                                for i, failure in enumerate(spec_failures):
+                                    # Icon based on type
+                                    icon = "🟡" if failure['is_skipped'] else "🔴"
+                                    failure_class = "skipped-failure" if failure['is_skipped'] else "real-failure"
                                     
-                                    if failure['is_skipped']:
-                                        st.warning("⚠️ Skipped due to previous failure")
-                                    
-                                    st.write("**Test:** ", failure['test_name'])
-                                    st.write("**Type:** ", failure['failure_type'])
-                                    
-                                    # Error summary
-                                    st.error(f"**Error:** {failure['error_summary']}")
-                                    
-                                    # Full details in expandable section
-                                    with st.expander("📋 Full Error Details"):
-                                        st.code(failure['error_details'], language="text")
-                                    
-                                    # Stack trace
-                                    if failure['full_stack_trace']:
-                                        with st.expander("🔍 Stack Trace"):
-                                            st.code(failure['full_stack_trace'], language="text")
-                                    
-                                    # AI Features
-                                    if use_ai and not failure['is_skipped']:
-                                        load_ai_modules()
-                                        st.markdown("---")
-                                        ai_tabs = ["🤖 AI Analysis"]
-                                        if enable_jira_generation:
-                                            ai_tabs.append("📝 Jira Ticket")
-                                        if enable_test_improvements:
-                                            ai_tabs.append("💡 Improvements")
+                                    with st.expander(
+                                        f"{icon} {i+1}. {failure['test_name']} ({failure['execution_time']}s)",
+                                        expanded=False
+                                    ):
+                                        st.markdown(f"<div class='{failure_class}'>", unsafe_allow_html=True)
                                         
-                                        ai_tab_objects = st.tabs(ai_tabs)
+                                        if failure['is_skipped']:
+                                            st.warning("⚠️ Skipped due to previous failure")
                                         
-                                        with ai_tab_objects[0]:
-                                            with st.spinner("Analyzing..."):
-                                                ai_analysis = generate_ai_summary(
-                                                    failure['test_name'],
-                                                    failure['error_summary'],
-                                                    failure['error_details']
-                                                )
-                                                st.info(ai_analysis)
+                                        st.write("**Test:** ", failure['test_name'])
+                                        st.write("**Type:** ", failure['failure_type'])
                                         
-                                        if enable_jira_generation and len(ai_tab_objects) > 1:
-                                            with ai_tab_objects[1]:
-                                                with st.spinner("Generating Jira ticket..."):
-                                                    jira_content = generate_jira_ticket(
-                                                        failure['test_name'],
-                                                        failure['error_summary'],
-                                                        failure['error_details'],
-                                                        ai_analysis if 'ai_analysis' in locals() else ""
-                                                    )
-                                                    st.markdown(jira_content)
-                                                    st.download_button(
-                                                        "📥 Download Jira Content",
-                                                        jira_content,
-                                                        file_name=f"jira_{failure['test_name'][:30]}.txt",
-                                                        key=f"jira_api_{idx}_{i}"
-                                                    )
+                                        # Error summary
+                                        st.error(f"**Error:** {failure['error_summary']}")
                                         
-                                        if enable_test_improvements and len(ai_tab_objects) > 2:
-                                            with ai_tab_objects[-1]:
-                                                with st.spinner("Generating improvement suggestions..."):
-                                                    improvements = suggest_test_improvements(
+                                        # Full details in expandable section
+                                        with st.expander("📋 Full Error Details"):
+                                            st.code(failure['error_details'], language="text")
+                                        
+                                        # Stack trace
+                                        if failure['full_stack_trace']:
+                                            with st.expander("🔍 Stack Trace"):
+                                                st.code(failure['full_stack_trace'], language="text")
+                                        
+                                        # AI Features
+                                        if use_ai and not failure['is_skipped']:
+                                            load_ai_modules()
+                                            st.markdown("---")
+                                            ai_tabs = ["🤖 AI Analysis"]
+                                            if enable_jira_generation:
+                                                ai_tabs.append("📝 Jira Ticket")
+                                            if enable_test_improvements:
+                                                ai_tabs.append("💡 Improvements")
+                                            
+                                            ai_tab_objects = st.tabs(ai_tabs)
+                                            
+                                            with ai_tab_objects[0]:
+                                                with st.spinner("Analyzing..."):
+                                                    ai_analysis = generate_ai_summary(
                                                         failure['test_name'],
                                                         failure['error_summary'],
                                                         failure['error_details']
                                                     )
-                                                    st.success(improvements)
-                                    
-                                    st.markdown("</div>", unsafe_allow_html=True)
-                            
-                            st.markdown("---")
+                                                    st.info(ai_analysis)
+                                            
+                                            if enable_jira_generation and len(ai_tab_objects) > 1:
+                                                with ai_tab_objects[1]:
+                                                    with st.spinner("Generating Jira ticket..."):
+                                                        jira_content = generate_jira_ticket(
+                                                            failure['test_name'],
+                                                            failure['error_summary'],
+                                                            failure['error_details'],
+                                                            ai_analysis if 'ai_analysis' in locals() else ""
+                                                        )
+                                                        st.markdown(jira_content)
+                                                        st.download_button(
+                                                            "📥 Download Jira Content",
+                                                            jira_content,
+                                                            file_name=f"jira_{failure['test_name'][:30]}.txt",
+                                                            key=f"jira_api_{idx}_{i}"
+                                                        )
+                                            
+                                            if enable_test_improvements and len(ai_tab_objects) > 2:
+                                                with ai_tab_objects[-1]:
+                                                    with st.spinner("Generating improvement suggestions..."):
+                                                        improvements = suggest_test_improvements(
+                                                            failure['test_name'],
+                                                            failure['error_summary'],
+                                                            failure['error_details']
+                                                        )
+                                                        st.success(improvements)
+                                        
+                                        st.markdown("</div>", unsafe_allow_html=True)
+                                
+                                st.markdown("---")
                     
                     # ============================================================
                     # BASELINE MANAGEMENT WITH MULTI-BASELINE SUPPORT
