@@ -133,17 +133,9 @@ if not check_password():
 # Hide GitHub icon and menu
 st.markdown("""
 <style>
-    /* Hide GitHub icon */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* Hide the entire top-right menu bar */
+    /* Hide only the Fork button and GitHub icon */
     .stAppDeployButton {display: none;}
-    button[kind="header"] {display: none;}
-    
-    /* Alternative: Hide just the Fork/GitHub button */
-    div[data-testid="stToolbar"] {display: none;}
+    button[kind="header"]:first-child {display: none;}
 </style>
 """, unsafe_allow_html=True)
 # ===================================================================
