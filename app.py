@@ -1849,7 +1849,7 @@ elif current_page == 'automation_api':
                             skipped_count = len(spec_failures) - real_count
                             
                             # Build header with counts
-                            header = f"##### 📋 Spec: <span style='color: green;'>{spec_name}</span>"
+                            header = f"📋 🟢 {spec_name}"
                             if real_count > 0:
                                 header += f" 🔴 {real_count}"
                             if skipped_count > 0:
