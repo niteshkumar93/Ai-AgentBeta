@@ -19,6 +19,7 @@ github = GitHubStorage(
     repo_name=st.secrets.get("GITHUB_REPO")
 )
 baseline_service = BaselineService(github)
+baseline_service.ensure_synced()
 
 # Import extractors
 from xml_extractor import extract_failed_tests
@@ -583,17 +584,43 @@ if current_page == 'dashboard':
 # ===================================================================
 # BASELINES PAGE SECTION
 # ===================================================================
+
 elif current_page == 'baselines':
     st.markdown("## 📈 Baseline Tracker")
     
-    # Platform Selection
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # ====================================================================
+    # SYNC STATUS BAR (Shows if using fast cache or slow GitHub)
+    # ====================================================================
+    sync_status = baseline_service.get_sync_status()
+    
+    # Display status based on cache state
+    if sync_status['is_synced'] and sync_status['total_cached'] > 0:
+        last_sync = sync_status['last_sync']
+        if last_sync:
+            try:
+                from datetime import datetime
+                sync_dt = datetime.fromisoformat(last_sync)
+                sync_display = sync_dt.strftime("%d %b %Y, %H:%M")
+            except:
+                sync_display = "Recently"
+        else:
+            sync_display = "Recently"
+        
+        st.success(f"⚡ **Fast Mode Active** - Using cached data | Last synced: {sync_display}")
+    else:
+        st.warning(f"🐌 **Slow Mode** - Cache empty, will load from GitHub (slower)")
+        st.info("💡 **Tip:** Click 'Sync from GitHub' below to enable fast mode")
+    
+    # ====================================================================
+    # CONTROL BUTTONS
+    # ====================================================================
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
     
     with col1:
         platform_filter = st.selectbox(
             "Select Platform",
             options=['provar', 'automation_api'],
-            format_func=lambda x: '🔍 Provar Baselines' if x == 'provar' else '🔧 AutomationAPI Baselines',
+            format_func=lambda x: '📝 Provar Baselines' if x == 'provar' else '🔧 AutomationAPI Baselines',
             key='baseline_platform_selector',
             index=0 if st.session_state.baseline_platform_filter == 'provar' else 1
         )
@@ -603,35 +630,120 @@ elif current_page == 'baselines':
             st.rerun()
     
     with col2:
-        if st.button("🔄 Refresh", use_container_width=True):
-            load_cached_baselines.clear()
-            get_baseline_projects.clear()
+        if st.button("🔄 Refresh", use_container_width=True, help="Refresh current view"):
             st.rerun()
     
     with col3:
-        if st.button("📡 Sync GitHub", use_container_width=True):
-            with st.spinner("Syncing..."):
-                synced = baseline_service.sync_from_github()
-                load_cached_baselines.clear()
-                get_baseline_projects.clear()
-            st.success(f"✅ Synced {synced} baseline(s)")
+        if st.button("📡 Sync GitHub", use_container_width=True, help="Download/restore from GitHub", type="primary"):
+            with st.spinner(f"Syncing {platform_filter} baselines from GitHub..."):
+                synced = baseline_service.sync_from_github(platform=platform_filter)
+            
+            if synced > 0:
+                st.success(f"✅ Synced {synced} baseline(s) from GitHub!")
+                st.balloons()
+            else:
+                st.info("ℹ️ No baselines found in GitHub for this platform")
             st.rerun()
+    
+    with col4:
+        if st.button("🗑️ Clear", use_container_width=True, help="Clear cache (admin only)"):
+            if admin_key:
+                expected_key = os.getenv("BASELINE_ADMIN_KEY", "admin123")
+                if admin_key == expected_key:
+                    baseline_service.clear_cache(platform=platform_filter)
+                    st.success(f"✅ Cleared {platform_filter} cache!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid admin key")
+            else:
+                st.error("❌ Admin key required!")
     
     st.markdown("---")
     
-    # Load baselines with caching
-    with st.spinner(f"Loading {platform_filter} baselines..."):
-        try:
-            all_baselines = load_cached_baselines(platform_filter)
-        except Exception as e:
-            st.error(f"Failed to load baselines: {e}")
-            all_baselines = []
+    # ====================================================================
+    # FIRST-TIME SYNC PROMPT (Only if cache is empty)
+    # ====================================================================
+    if not sync_status['is_synced'] and sync_status['total_cached'] == 0:
+        with st.container():
+            st.markdown("### 🚀 Welcome to Baseline Tracker!")
+            st.info("""
+            **Your baseline cache is empty.** This means data will be loaded from GitHub every time (slower).
+            
+            **Click below to sync once and enable fast mode:**
+            """)
+            
+            col1, col2, col3 = st.columns([1, 2, 1])
+            
+            with col2:
+                if st.button(
+                    "📥 Sync All Baselines from GitHub", 
+                    type="primary", 
+                    use_container_width=True,
+                    key="first_sync_button"
+                ):
+                    with st.spinner("🔄 Syncing all baselines from GitHub..."):
+                        synced = baseline_service.sync_from_github()
+                    
+                    if synced > 0:
+                        st.balloons()
+                        st.success(f"✅ Successfully synced {synced} baseline(s)!")
+                        st.info("⚡ **Fast mode enabled!** Your baselines are now cached for instant access.")
+                        st.rerun()
+                    else:
+                        st.warning("No baselines found in GitHub. Upload some reports to create baselines!")
+            
+            st.markdown("---")
     
-    # Overall Statistics - Compact
+    # ====================================================================
+    # STATISTICS CARDS
+    # ====================================================================
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        cache_count = sync_status['cache_count'][platform_filter]
+        st.metric("💾 Cached Locally", cache_count)
+    
+    with col2:
+        github_count = baseline_service.get_github_count(platform_filter)
+        st.metric("☁️ In GitHub", github_count)
+    
+    with col3:
+        # Check sync status
+        if cache_count == github_count:
+            sync_icon = "✅"
+            sync_label = "In Sync"
+        elif cache_count < github_count:
+            sync_icon = "⬇️"
+            sync_label = "Need Sync"
+        else:
+            sync_icon = "⬆️"
+            sync_label = "Local Ahead"
+        st.metric("🔄 Status", f"{sync_icon} {sync_label}")
+    
+    with col4:
+        speed_mode = "⚡ Fast" if sync_status['is_synced'] else "🐌 Slow"
+        st.metric("⚡ Mode", speed_mode)
+    
+    st.markdown("---")
+    
+    # ====================================================================
+    # LOAD BASELINES (Now from CACHE - instant!)
+    # ====================================================================
+    try:
+        # This loads from session_state cache (instant!)
+        all_baselines = baseline_service.list(platform=platform_filter)
+    except Exception as e:
+        st.error(f"Failed to load baselines: {e}")
+        all_baselines = []
+    
+    # ====================================================================
+    # DISPLAY BASELINES
+    # ====================================================================
+    
     if all_baselines:
-        # Group baselines by project first
+        # Group baselines by project
         baselines_by_project = {}
-
+        
         for baseline in all_baselines:
             if platform_filter == "provar":
                 project_name = extract_provar_project_from_baseline(baseline["name"])
@@ -639,79 +751,38 @@ elif current_page == 'baselines':
                 project_name = baseline.get("project")
                 if not project_name:
                     project_name = extract_project_from_baseline_name(baseline["name"])
-
-            # ✅ Append ONLY ONCE
+            
             baselines_by_project.setdefault(project_name, []).append(baseline)
-
-
+        
+        # Sort baselines within each project (newest first)
         for project in baselines_by_project:
-            def extract_ts(name):
-                try:
-                    return name.split("_")[-1].replace(".json", "")
-                except:
-                    return ""
-
             baselines_by_project[project].sort(
-                key=lambda b: extract_ts(b['name']),
+                key=lambda b: b.get('created_at', ''),
                 reverse=True
             )
-
-
-        # Summary metrics
-        col1, col2, col3, col4 = st.columns(4)
         
-        with col1:
-            st.metric("📋 Total Baselines", len(all_baselines))
-        
-        with col2:
-            st.metric("🏢 Projects", len(baselines_by_project))
-        
-        with col3:
-            if all_baselines:
-                latest = all_baselines[0]
-                latest_time = _format_time(latest['name'].split('_')[-1].replace('.json', ''))
-                st.metric("🕐 Latest", latest_time)
-        
-        with col4:
-            platform_icon = "🔍" if platform_filter == "provar" else "🔧"
-            st.metric("🔧 Platform", f"{platform_icon} {platform_filter.title()}")
-        
-        st.markdown("---")
-        
-        # Display baselines grouped by project
         st.markdown(f"### 📂 Baselines by Project ({len(baselines_by_project)} projects)")
         
-        # Add custom CSS for compact view
-        st.markdown("""
-        <style>
-        .compact-baseline {
-            padding: 8px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        # Display each project as a collapsible section
+        # ====================================================================
+        # DISPLAY EACH PROJECT
+        # ====================================================================
         for project_name, project_baselines in sorted(baselines_by_project.items()):
             with st.expander(
                 f"📁 {project_name} ({len(project_baselines)} baseline(s))",
                 expanded=False
             ):
-                # Show project summary
+                # Project summary
                 total_failures_in_project = 0
                 for baseline in project_baselines:
-                    try:
-                        baseline_data = baseline_service.load(baseline['name'], platform=platform_filter)
-                        if baseline_data and 'failures' in baseline_data:
-                            total_failures_in_project += len(baseline_data['failures'])
-                    except:
-                        pass
+                    total_failures_in_project += baseline.get('failure_count', 0)
                 
                 col1, col2 = st.columns(2)
                 with col1:
                     st.caption(f"📊 Total Failures: **{total_failures_in_project}**")
                 with col2:
-                    st.caption(f"📅 Latest: **{_format_time(project_baselines[0]['name'].split('_')[-1].replace('.json', ''))}**")
+                    if project_baselines:
+                        latest_timestamp = project_baselines[0].get('created_at', '')
+                        st.caption(f"📅 Latest: **{_format_time(latest_timestamp)}**")
                 
                 st.markdown("---")
                 
@@ -720,31 +791,32 @@ elif current_page == 'baselines':
                 selected_baseline_name = st.selectbox(
                     "Select Baseline to View",
                     options=baseline_options,
-                    format_func=lambda x: f"📅 {_format_time(x.split('_')[-1].replace('.json', ''))} ({x.split('_')[0]})",
+                    format_func=lambda x: f"📅 {_format_time(next((b['created_at'] for b in project_baselines if b['name'] == x), ''))} - {next((b['label'] for b in project_baselines if b['name'] == x), 'Auto')}",
                     key=f"baseline_selector_{project_name}"
                 )
                 
-                # Find the selected baseline
+                # Find selected baseline
                 selected_baseline = next((b for b in project_baselines if b['name'] == selected_baseline_name), None)
                 
                 if selected_baseline:
-                    # Load baseline data
+                    # Load baseline data (from cache - instant!)
                     try:
                         baseline_data = baseline_service.load(selected_baseline['name'], platform=platform_filter)
                         has_data = baseline_data and 'failures' in baseline_data
                         failure_count = len(baseline_data['failures']) if has_data else 0
-                    except:
+                    except Exception as e:
+                        st.error(f"Error loading baseline: {e}")
                         has_data = False
                         failure_count = 0
                     
                     st.markdown("---")
                     
-                    # Compact info display
+                    # Display baseline info
                     col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
                     
                     with col1:
                         st.markdown(f"**📄 {selected_baseline['name'][:60]}**")
-                        st.caption(f"🕐 {_format_time(selected_baseline['name'].split('_')[-1].replace('.json', ''))}")
+                        st.caption(f"🏷️ {selected_baseline.get('label', 'Auto')} | 🕐 {_format_time(selected_baseline.get('created_at', ''))}")
                     
                     with col2:
                         st.metric("❌ Failures", failure_count)
@@ -766,10 +838,13 @@ elif current_page == 'baselines':
                     with col4:
                         if st.button("🗑️", key=f"delete_{selected_baseline['name']}", help="Delete Baseline", use_container_width=True):
                             if admin_key:
-                                baseline_service.delete(selected_baseline['name'], platform=platform_filter)
-                                st.success("✅ Deleted!")
-                                load_cached_baselines.clear()
-                                st.rerun()
+                                expected_key = os.getenv("BASELINE_ADMIN_KEY", "admin123")
+                                if admin_key == expected_key:
+                                    baseline_service.delete(selected_baseline['name'], platform=platform_filter)
+                                    st.success("✅ Deleted from cache and GitHub!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Invalid admin key")
                             else:
                                 st.error("❌ Admin key required!")
                     
@@ -807,48 +882,53 @@ elif current_page == 'baselines':
                                 st.session_state[view_key] = False
                                 st.rerun()
                 
-                # Show all baselines in this project (compact list)
+                # Show all baselines in project (compact list)
                 st.markdown("---")
                 st.markdown("**📜 All Baselines in this Project:**")
                 
                 for idx, baseline in enumerate(project_baselines):
-                    timestamp = _format_time(baseline['name'].split('_')[-1].replace('.json', ''))
+                    timestamp = _format_time(baseline.get('created_at', ''))
+                    label = baseline.get('label', 'Auto')
+                    failure_count = baseline.get('failure_count', 0)
                     
-                    try:
-                        baseline_data = baseline_service.load(baseline['name'], platform=platform_filter)
-                        failure_count = len(baseline_data['failures']) if baseline_data and 'failures' in baseline_data else 0
-                    except:
-                        failure_count = 0
-                    
-                    col1, col2, col3 = st.columns([4, 1, 1])
+                    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
                     
                     with col1:
                         st.caption(f"{idx+1}. 📅 {timestamp}")
                     
                     with col2:
-                        st.caption(f"❌ {failure_count}")
+                        st.caption(f"🏷️ {label}")
                     
                     with col3:
+                        st.caption(f"❌ {failure_count}")
+                    
+                    with col4:
                         if baseline['name'] == selected_baseline_name:
                             st.caption("✅ **Selected**")
-                        else:
-                            st.caption("")
     
     else:
-        st.info(f"ℹ️ No baselines found for {platform_filter}")
-        st.markdown("""
-        ### 🚀 Get Started
+        # No baselines found
+        st.info(f"ℹ️ No baselines in cache for {platform_filter}")
         
-        1. Upload XML reports in the **Provar Reports** or **AutomationAPI Reports** pages
-        2. Analyze the failures
-        3. Save a baseline to start tracking changes
-        4. Come back here to view and manage your baselines
-        """)
+        # Check if GitHub has baselines
+        github_count = baseline_service.get_github_count(platform_filter)
         
-        col1, col2 = st.columns(2)
+        if github_count > 0:
+            st.warning(f"⚠️ Found {github_count} baseline(s) in GitHub. Click 'Sync GitHub' to load them!")
+        else:
+            st.markdown("""
+            ### 🚀 Get Started
+            
+            1. Upload XML reports in the **Provar Reports** or **AutomationAPI Reports** pages
+            2. Analyze the failures
+            3. Save a baseline to start tracking changes
+            4. Come back here to view and manage your baselines
+            """)
+        
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("🔍 Go to Provar Reports", use_container_width=True, type="primary"):
+            if st.button("📝 Go to Provar Reports", use_container_width=True, type="primary"):
                 st.session_state.current_page = 'provar'
                 st.rerun()
         
@@ -856,6 +936,14 @@ elif current_page == 'baselines':
             if st.button("🔧 Go to AutomationAPI Reports", use_container_width=True, type="primary"):
                 st.session_state.current_page = 'automation_api'
                 st.rerun()
+        
+        with col3:
+            if github_count > 0:
+                if st.button("📡 Sync from GitHub", use_container_width=True, type="primary"):
+                    with st.spinner("Syncing..."):
+                        synced = baseline_service.sync_from_github(platform=platform_filter)
+                    st.success(f"✅ Synced {synced} baseline(s)!")
+                    st.rerun()
 # ===================================================================
 # SETTINGS PAGE
 # ===================================================================

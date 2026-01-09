@@ -1,18 +1,25 @@
 """
-Baseline Service - Unified baseline management with GitHub storage
-This service ensures ALL baselines are saved to GitHub automatically
+Enhanced Baseline Service - Fast Session State Cache + GitHub Backup
+This version uses st.session_state for in-memory caching (survives reruns)
+Falls back to GitHub only when cache misses occur
 """
 
 import json
-import os
+import streamlit as st
 from datetime import datetime
 from typing import List, Dict, Optional
 
 
 class BaselineService:
     """
-    Unified baseline service that ALWAYS saves to GitHub
-    Supports both Provar and AutomationAPI baselines
+    Hybrid baseline service with intelligent caching:
+    - Primary: st.session_state (instant, survives reruns)
+    - Backup: GitHub (persistent, slower)
+    
+    Data flow:
+    1. Save → both session_state + GitHub
+    2. Load → session_state first, GitHub fallback
+    3. List → session_state (synced from GitHub)
     """
     
     def __init__(self, github_storage):
@@ -23,8 +30,38 @@ class BaselineService:
             github_storage: GitHubStorage instance
         """
         self.github = github_storage
-        self.local_cache_dir = "data/baseline_cache"
-        os.makedirs(self.local_cache_dir, exist_ok=True)
+        self._init_cache()
+    
+    def _init_cache(self):
+        """Initialize in-memory cache in session_state"""
+        if 'baseline_cache' not in st.session_state:
+            st.session_state.baseline_cache = {
+                'provar': {},           # {filename: baseline_data}
+                'automation_api': {},   # {filename: baseline_data}
+                'metadata': {
+                    'last_sync': None,
+                    'is_synced': False,
+                    'sync_count': 0
+                }
+            }
+            print("🆕 Initialized baseline cache in session_state")
+    
+    def _get_cache(self, platform: str) -> Dict:
+        """Get cache for specific platform"""
+        return st.session_state.baseline_cache.get(platform, {})
+    
+    def _set_cache(self, platform: str, filename: str, data: Dict):
+        """Store data in cache"""
+        st.session_state.baseline_cache[platform][filename] = data
+        print(f"💾 Cached: {filename}")
+    
+    def _update_metadata(self, **kwargs):
+        """Update cache metadata"""
+        st.session_state.baseline_cache['metadata'].update(kwargs)
+    
+    # ====================================================================
+    # SAVE - Dual Storage (Session State + GitHub)
+    # ====================================================================
     
     def save(
         self, 
@@ -34,7 +71,7 @@ class BaselineService:
         label: Optional[str] = None
     ) -> str:
         """
-        Save baseline to GitHub (PRIMARY) and local cache (BACKUP)
+        Save baseline to BOTH session_state AND GitHub
         
         Returns:
             baseline_id: Unique identifier for this baseline
@@ -63,7 +100,14 @@ class BaselineService:
         # Create filename
         filename = f"{project}_{platform}_{baseline_id}.json"
         
-        # 1️⃣ SAVE TO GITHUB (PRIMARY)
+        # 1️⃣ SAVE TO SESSION STATE (INSTANT)
+        try:
+            self._set_cache(platform, filename, payload)
+            print(f"✅ Saved to cache: {filename}")
+        except Exception as e:
+            print(f"⚠️ Cache save failed: {e}")
+        
+        # 2️⃣ SAVE TO GITHUB (PERSISTENT BACKUP)
         try:
             success = self.github.save_baseline(
                 json_content,
@@ -80,22 +124,11 @@ class BaselineService:
             print(f"❌ GitHub save failed: {e}")
             raise Exception(f"Failed to save baseline to GitHub: {str(e)}")
         
-        # 2️⃣ SAVE TO LOCAL CACHE (BACKUP)
-        try:
-            cache_dir = os.path.join(self.local_cache_dir, platform, project)
-            os.makedirs(cache_dir, exist_ok=True)
-            
-            cache_file = os.path.join(cache_dir, f"{baseline_id}.json")
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                f.write(json_content)
-            
-            print(f"✅ Saved to local cache: {cache_file}")
-        
-        except Exception as e:
-            # Local cache failure is not critical
-            print(f"⚠️ Local cache save failed: {e}")
-        
         return baseline_id
+    
+    # ====================================================================
+    # LOAD - Cache First, GitHub Fallback
+    # ====================================================================
     
     def load(
         self,
@@ -103,7 +136,7 @@ class BaselineService:
         platform: str
     ) -> Optional[Dict]:
         """
-        Load baseline from GitHub
+        Load baseline from CACHE first, GitHub if cache miss
         
         Args:
             filename: Name of the baseline file
@@ -112,13 +145,24 @@ class BaselineService:
         Returns:
             Baseline data or None
         """
+        # 1️⃣ TRY CACHE FIRST (INSTANT!)
+        cache = self._get_cache(platform)
+        if filename in cache:
+            print(f"⚡ Cache hit: {filename}")
+            return cache[filename]
+        
+        # 2️⃣ FALLBACK TO GITHUB (slower)
+        print(f"🌐 Cache miss, loading from GitHub: {filename}")
         folder = f"baselines/{platform}"
         
         try:
             content = self.github.load_baseline(filename, folder=folder)
             
             if content:
-                return json.loads(content)
+                data = json.loads(content)
+                # Cache it for next time
+                self._set_cache(platform, filename, data)
+                return data
             
             return None
         
@@ -126,13 +170,17 @@ class BaselineService:
             print(f"❌ Failed to load baseline: {e}")
             return None
     
+    # ====================================================================
+    # LIST - From Cache (Fast!)
+    # ====================================================================
+    
     def list(
         self,
         platform: Optional[str] = None,
         project: Optional[str] = None
     ) -> List[Dict]:
         """
-        List all baselines from GitHub
+        List all baselines from CACHE (instant!)
         
         Args:
             platform: Filter by platform ("provar" or "automation_api")
@@ -141,28 +189,37 @@ class BaselineService:
         Returns:
             List of baseline metadata
         """
-        try:
-            if platform:
-                folder = f"baselines/{platform}"
-                all_files = self.github.list_baselines(folder=folder)
-            else:
-                # Get both platforms
-                provar_files = self.github.list_baselines(folder="baselines/provar")
-                api_files = self.github.list_baselines(folder="baselines/automation_api")
-                all_files = provar_files + api_files
-            
-            # Filter by project if specified
-            if project:
-                all_files = [
-                    f for f in all_files 
-                    if f['name'].startswith(project)
-                ]
-            
-            return all_files
+        results = []
         
-        except Exception as e:
-            print(f"❌ Failed to list baselines: {e}")
-            return []
+        # Determine which platforms to check
+        platforms = [platform] if platform else ['provar', 'automation_api']
+        
+        for plat in platforms:
+            cache = self._get_cache(plat)
+            
+            for filename, data in cache.items():
+                # Filter by project if specified
+                if project and data.get('project') != project:
+                    continue
+                
+                results.append({
+                    'name': filename,
+                    'project': data.get('project'),
+                    'created_at': data.get('created_at'),
+                    'failure_count': data.get('failure_count', 0),
+                    'label': data.get('label', 'Auto'),
+                    'platform': plat
+                })
+        
+        # Sort by created_at (newest first)
+        results.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        print(f"📋 Listed {len(results)} baselines from cache")
+        return results
+    
+    # ====================================================================
+    # DELETE - Both Cache and GitHub
+    # ====================================================================
     
     def delete(
         self,
@@ -170,7 +227,7 @@ class BaselineService:
         platform: str
     ) -> bool:
         """
-        Delete baseline from GitHub
+        Delete baseline from BOTH cache AND GitHub
         
         Args:
             filename: Name of the baseline file
@@ -179,6 +236,13 @@ class BaselineService:
         Returns:
             True if successful
         """
+        # 1️⃣ DELETE FROM CACHE
+        cache = self._get_cache(platform)
+        if filename in cache:
+            del cache[filename]
+            print(f"✅ Deleted from cache: {filename}")
+        
+        # 2️⃣ DELETE FROM GITHUB
         folder = f"baselines/{platform}"
         
         try:
@@ -193,54 +257,135 @@ class BaselineService:
             print(f"❌ Failed to delete baseline: {e}")
             return False
     
-    def sync_from_github(self) -> int:
+    # ====================================================================
+    # SYNC - GitHub → Cache (Manual Restore)
+    # ====================================================================
+    
+    def sync_from_github(self, platform: Optional[str] = None) -> int:
         """
-        Sync all baselines from GitHub to local cache
-        Useful for app startup
+        Sync baselines from GitHub to session_state cache
+        This is the "Restore from GitHub" button functionality
+        
+        Args:
+            platform: Sync specific platform, or None for all
         
         Returns:
             Number of baselines synced
         """
         synced = 0
         
-        for platform in ["provar", "automation_api"]:
+        # Determine which platforms to sync
+        platforms = [platform] if platform else ["provar", "automation_api"]
+        
+        for plat in platforms:
             try:
-                folder = f"baselines/{platform}"
+                folder = f"baselines/{plat}"
+                
+                # Get list of files from GitHub
                 files = self.github.list_baselines(folder=folder)
+                
+                print(f"🔄 Syncing {len(files)} files from GitHub/{plat}")
                 
                 for file_info in files:
                     filename = file_info['name']
                     
-                    # Load from GitHub
-                    content = self.github.load_baseline(filename, folder=folder)
-                    
-                    if content:
-                        # Save to local cache
-                        try:
-                            data = json.loads(content)
-                            project = data.get('project', 'unknown')
-                            baseline_id = data.get('id', 'unknown')
-                            
-                            cache_dir = os.path.join(
-                                self.local_cache_dir, 
-                                platform, 
-                                project
-                            )
-                            os.makedirs(cache_dir, exist_ok=True)
-                            
-                            cache_file = os.path.join(cache_dir, f"{baseline_id}.json")
-                            with open(cache_file, 'w', encoding='utf-8') as f:
-                                f.write(content)
-                            
-                            synced += 1
+                    try:
+                        # Load from GitHub
+                        content = self.github.load_baseline(filename, folder=folder)
                         
-                        except Exception as e:
-                            print(f"⚠️ Failed to cache {filename}: {e}")
+                        if content:
+                            data = json.loads(content)
+                            
+                            # Store in cache
+                            self._set_cache(plat, filename, data)
+                            synced += 1
+                    
+                    except Exception as e:
+                        print(f"⚠️ Failed to sync {filename}: {e}")
+                        continue
             
             except Exception as e:
-                print(f"⚠️ Failed to sync {platform} baselines: {e}")
+                print(f"⚠️ Failed to sync {plat} baselines: {e}")
         
+        # Update metadata
+        self._update_metadata(
+            last_sync=datetime.now().isoformat(),
+            is_synced=True,
+            sync_count=st.session_state.baseline_cache['metadata'].get('sync_count', 0) + 1
+        )
+        
+        print(f"✅ Sync complete: {synced} baselines loaded into cache")
         return synced
+    
+    # ====================================================================
+    # AUTO-SYNC - Intelligent First Load
+    # ====================================================================
+    
+    def ensure_synced(self) -> bool:
+        """
+        Auto-sync from GitHub if cache is empty (first load only)
+        
+        Returns:
+            True if sync was performed
+        """
+        metadata = st.session_state.baseline_cache['metadata']
+        
+        # Check if already synced
+        if metadata.get('is_synced', False):
+            print("✓ Cache already synced, skipping auto-sync")
+            return False
+        
+        # Check if cache is empty
+        provar_count = len(self._get_cache('provar'))
+        api_count = len(self._get_cache('automation_api'))
+        
+        if provar_count == 0 and api_count == 0:
+            print("🚀 First load detected, auto-syncing from GitHub...")
+            synced = self.sync_from_github()
+            return synced > 0
+        
+        return False
+    
+    # ====================================================================
+    # STATS & UTILITIES
+    # ====================================================================
+    
+    def get_sync_status(self) -> Dict:
+        """Get cache status and statistics"""
+        metadata = st.session_state.baseline_cache['metadata']
+        
+        return {
+            'is_synced': metadata.get('is_synced', False),
+            'last_sync': metadata.get('last_sync'),
+            'sync_count': metadata.get('sync_count', 0),
+            'cache_count': {
+                'provar': len(self._get_cache('provar')),
+                'automation_api': len(self._get_cache('automation_api'))
+            },
+            'total_cached': len(self._get_cache('provar')) + len(self._get_cache('automation_api'))
+        }
+    
+    def clear_cache(self, platform: Optional[str] = None):
+        """
+        Clear cache (useful for testing or forcing re-sync)
+        
+        Args:
+            platform: Clear specific platform, or None for all
+        """
+        if platform:
+            st.session_state.baseline_cache[platform] = {}
+            print(f"🗑️ Cleared {platform} cache")
+        else:
+            st.session_state.baseline_cache = {
+                'provar': {},
+                'automation_api': {},
+                'metadata': {
+                    'last_sync': None,
+                    'is_synced': False,
+                    'sync_count': 0
+                }
+            }
+            print("🗑️ Cleared all caches")
     
     def get_stats(self, project: str, platform: str) -> Dict:
         """
@@ -263,19 +408,29 @@ class BaselineService:
                 "total_failures": 0
             }
         
-        # Sort by name (which contains timestamp)
-        baselines_sorted = sorted(baselines, key=lambda x: x['name'], reverse=True)
-        
-        # Load and analyze
-        total_failures = 0
-        for baseline_info in baselines_sorted:
-            baseline_data = self.load(baseline_info['name'], platform)
-            if baseline_data:
-                total_failures += baseline_data.get('failure_count', 0)
+        # Calculate total failures
+        total_failures = sum(b.get('failure_count', 0) for b in baselines)
         
         return {
             "count": len(baselines),
-            "latest": baselines_sorted[0]['name'] if baselines_sorted else None,
-            "oldest": baselines_sorted[-1]['name'] if baselines_sorted else None,
+            "latest": baselines[0]['name'] if baselines else None,
+            "oldest": baselines[-1]['name'] if baselines else None,
             "total_failures": total_failures
         }
+    
+    def get_github_count(self, platform: str) -> int:
+        """
+        Get count of baselines in GitHub (for comparison)
+        
+        Args:
+            platform: "provar" or "automation_api"
+        
+        Returns:
+            Number of files in GitHub
+        """
+        try:
+            folder = f"baselines/{platform}"
+            files = self.github.list_baselines(folder=folder)
+            return len(files)
+        except:
+            return 0
