@@ -1043,7 +1043,7 @@ elif current_page == 'settings':
     # AI Configuration
     st.markdown("### 🤖 AI Configuration")
     if groq_key:
-        st.success("✅ Groq AI configured (Free)")
+        st.success("✅ Groq AI configured")
     elif openai_key:
         st.info("ℹ️ OpenAI configured (Paid)")
     else:
