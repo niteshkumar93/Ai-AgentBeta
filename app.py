@@ -1034,7 +1034,8 @@ elif current_page == 'settings':
         st.markdown("**Admin Info**")
         try:
             st.info(f"Owner: {"Nitesh Kumar"}")
-                    except:
+            
+        except:
             st.warning("GitHub credentials not configured")
     
     st.markdown("---")
