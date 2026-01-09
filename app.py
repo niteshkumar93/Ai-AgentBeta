@@ -84,8 +84,8 @@ def check_password():
     
     def password_entered():
         """Checks whether a password entered by the user is correct."""
-        if (st.session_state["username"] == st.secrets["credentials"]["username"] and 
-            st.session_state["password"] == st.secrets["credentials"]["password"]):
+        if (st.session_state["username"] == "Admin" and 
+            st.session_state["password"] == "Nitesh01"):
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Don't store password
             del st.session_state["username"]  # Don't store username
@@ -94,7 +94,6 @@ def check_password():
 
     # First run or password not yet verified
     if "password_correct" not in st.session_state:
-        # Show login form
         st.markdown("### 🔐 Login Required")
         st.text_input("Username", key="username")
         st.text_input("Password", type="password", key="password")
