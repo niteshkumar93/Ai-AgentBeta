@@ -1031,11 +1031,10 @@ elif current_page == 'settings':
             st.error(f"❌ Failed: {str(e)[:50]}")
     
     with col2:
-        st.markdown("**Repository Info**")
+        st.markdown("**Admin Info**")
         try:
-            st.info(f"Owner: {st.secrets.get('GITHUB_OWNER', 'Not set')}")
-            st.info(f"Repo: {st.secrets.get('GITHUB_REPO', 'Not set')}")
-        except:
+            st.info(f"Owner: {"Nitesh Kumar"}")
+                    except:
             st.warning("GitHub credentials not configured")
     
     st.markdown("---")
