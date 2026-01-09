@@ -1,0 +1,8 @@
+[server]
+maxUploadSize = 200
+
+[runner]
+fastReruns = true
+
+[browser]
+gatherUsageStats = false

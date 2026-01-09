@@ -28,13 +28,6 @@ from automation_api_extractor import (
     get_failure_statistics
 )
 
-# Import AI modules
-from ai_reasoner import (
-    generate_ai_summary,
-    generate_batch_analysis,
-    generate_jira_ticket,
-    suggest_test_improvements
-)
 
 # Import baseline managers
 from baseline_manager import (
@@ -82,6 +75,29 @@ try:
     API_MULTI_BASELINE_AVAILABLE = True
 except ImportError:
     API_MULTI_BASELINE_AVAILABLE = False
+    # ===================================================================
+# AI modules - lazy loaded only when needed
+generate_ai_summary = None
+generate_batch_analysis = None
+generate_jira_ticket = None
+suggest_test_improvements = None
+
+def load_ai_modules():
+    """Load AI modules only when user enables AI"""
+    global generate_ai_summary, generate_batch_analysis, generate_jira_ticket, suggest_test_improvements
+    
+    if generate_ai_summary is None:  # Only import once
+        from ai_reasoner import (
+            generate_ai_summary as _gen_summary,
+            generate_batch_analysis as _gen_batch,
+            generate_jira_ticket as _gen_jira,
+            suggest_test_improvements as _gen_improve
+        )
+        generate_ai_summary = _gen_summary
+        generate_batch_analysis = _gen_batch
+        generate_jira_ticket = _gen_jira
+        suggest_test_improvements = _gen_improve
+    return True
 
 # ===================================================================
 def extract_project_from_baseline_name(baseline_name: str) -> str:
@@ -138,7 +154,7 @@ def extract_provar_project_from_baseline(filename: str) -> str:
 # CACHING AND SESSION STATE INITIALIZATION
 # ===================================================================
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=1800)  # Cache for 30 minutes
 def load_cached_baselines(platform, project=None):
     """Load baselines with caching to improve performance"""
     try:
@@ -149,7 +165,7 @@ def load_cached_baselines(platform, project=None):
         st.error(f"Error loading baselines: {e}")
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=1800)
 def get_baseline_projects(platform):
     """Get unique projects for a platform"""
     try:
@@ -367,13 +383,7 @@ if 'current_page' not in st.session_state:
 
 # Auto-sync baselines from GitHub
 if "baselines_synced" not in st.session_state:
-    try:
-        synced = baseline_service.sync_from_github()
-        st.session_state.baselines_synced = True
-        if synced > 0:
-            st.toast(f"🔄 {synced} baseline(s) synced from GitHub", icon="✅")
-    except Exception as e:
-        print(f"Auto-sync skipped: {e}")
+    st.session_state.baselines_synced = True
 
 # ===================================================================
 # SIDEBAR - NAVIGATION & SETTINGS
@@ -1027,6 +1037,7 @@ elif current_page == 'provar':
             
             # Generate batch analysis if enabled
             if use_ai and enable_batch_analysis:
+                load_ai_modules()  # ✅ Load AI only when needed
                 with st.spinner("🧠 Running batch pattern analysis..."):
                     all_failures = []
                     for result in st.session_state.all_results:
@@ -1034,7 +1045,6 @@ elif current_page == 'provar':
                     
                     if all_failures:
                         st.session_state.batch_analysis = generate_batch_analysis(all_failures)
-        
         # -----------------------------------------------------------
         # DISPLAY PROVAR RESULTS (OLD LOGIC)
         # -----------------------------------------------------------
@@ -1160,6 +1170,7 @@ elif current_page == 'provar':
                                     
                                     # AI Features
                                     if use_ai:
+                                        load_ai_modules()
                                         ai_tabs = []
                                         if True:
                                             ai_tabs.append("🤖 AI Analysis")
@@ -1723,6 +1734,7 @@ elif current_page == 'automation_api':
                                     
                                     # AI Features
                                     if use_ai and not failure['is_skipped']:
+                                        load_ai_modules()
                                         st.markdown("---")
                                         ai_tabs = ["🤖 AI Analysis"]
                                         if enable_jira_generation:
