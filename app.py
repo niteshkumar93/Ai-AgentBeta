@@ -1922,7 +1922,7 @@ elif current_page == 'automation_api':
                                                             "📥 Download Jira Content",
                                                             jira_content,
                                                             file_name=f"jira_{failure['test_name'][:30]}.txt",
-                                                            key=f"jira_api_{idx}_{i}"
+                                                            key=f"jira_api_{idx}_{hash(spec_name)}_{i}"
                                                         )
                                             
                                             if enable_test_improvements and len(ai_tab_objects) > 2:
