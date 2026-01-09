@@ -76,6 +76,54 @@ try:
 except ImportError:
     API_MULTI_BASELINE_AVAILABLE = False
     # ===================================================================
+# ===================================================================
+# PASSWORD PROTECTION
+# ===================================================================
+def check_password():
+    """Returns `True` if the user had the correct password."""
+    
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if (st.session_state["username"] == st.secrets["credentials"]["username"] and 
+            st.session_state["password"] == st.secrets["credentials"]["password"]):
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store password
+            del st.session_state["username"]  # Don't store username
+        else:
+            st.session_state["password_correct"] = False
+
+    # First run or password not yet verified
+    if "password_correct" not in st.session_state:
+        # Show login form
+        st.markdown("### 🔐 Login Required")
+        st.text_input("Username", key="username")
+        st.text_input("Password", type="password", key="password")
+        st.button("Login", on_click=password_entered)
+        return False
+    
+    # Password incorrect
+    elif not st.session_state["password_correct"]:
+        st.markdown("### 🔐 Login Required")
+        st.text_input("Username", key="username")
+        st.text_input("Password", type="password", key="password")
+        st.button("Login", on_click=password_entered)
+        st.error("😕 Username or password incorrect")
+        return False
+    
+    # Password correct
+    else:
+        return True
+
+# Check password before showing app
+if not check_password():
+    st.stop()
+
+# ===================================================================
+# REST OF YOUR APP CONTINUES HERE
+# ===================================================================
+
+
+    # ===================================================================
 # AI modules - lazy loaded only when needed
 generate_ai_summary = None
 generate_batch_analysis = None
