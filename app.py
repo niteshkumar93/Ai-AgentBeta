@@ -513,7 +513,7 @@ current_page = st.session_state.current_page
 # Page Headers
 page_headers = {
     'dashboard': ('📊 Dashboard', 'Overview and quick stats'),
-    'provar': ('🔍 Provar Application Reports', 'Analyze Provar XML reports'),
+    'Provar Application': ('🔍 Provar Application Reports', 'Analyze Provar XML reports'),
     'automation_api': ('🔧 Test Builder Reports', 'Analyze AutomationAPI XML reports'),
     'baselines': ('📈 Baseline Tracker', 'Manage and track baselines'),
     'settings': ('⚙️ Settings', 'Configure application settings')
