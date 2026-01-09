@@ -83,18 +83,9 @@ st.set_page_config(page_title="Provar Report Analyzer AI", page_icon="🎯", lay
 
 st.markdown("""
 <style>
-    /* Hide only GitHub Fork button */
+    /* Hide only the Fork button and GitHub icon */
     .stAppDeployButton {display: none;}
-    
-    /* Hide Fork text and GitHub icon specifically */
-    button[kind="header"] {display: none;}
-    
-    /* Alternative: Target the specific toolbar elements */
-    div[data-testid="stToolbar"] > div:first-child {display: none;}
-    div[data-testid="stToolbar"] > div:nth-child(2) {display: none;}
-    
-    /* Keep the three-dot menu visible for settings */
-    /* Do NOT hide: #MainMenu, header, or the entire toolbar */
+    button[kind="header"]:first-child {display: none;}
 </style>
 """, unsafe_allow_html=True)
 # ===================================================================
