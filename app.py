@@ -19,7 +19,6 @@ github = GitHubStorage(
     repo_name=st.secrets.get("GITHUB_REPO")
 )
 baseline_service = BaselineService(github)
-baseline_service.ensure_synced()
 
 # Import extractors
 from xml_extractor import extract_failed_tests
