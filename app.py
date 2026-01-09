@@ -76,6 +76,25 @@ try:
 except ImportError:
     API_MULTI_BASELINE_AVAILABLE = False
     # ===================================================================
+    # ===================================================================
+# HIDE GITHUB ICON - MUST BE FIRST
+# ===================================================================
+st.set_page_config(page_title="Provar Report Analyzer AI", page_icon="🎯", layout="wide")
+
+st.markdown("""
+<style>
+    /* Hide GitHub icon and menu */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stAppDeployButton {display: none;}
+    button[kind="header"] {display: none;}
+    div[data-testid="stToolbar"] {display: none;}
+    
+    /* Hide Fork button and three-dot menu */
+    .stAppHeader {display: none;}
+</style>
+""", unsafe_allow_html=True)
 # ===================================================================
 # PASSWORD PROTECTION
 # ===================================================================
