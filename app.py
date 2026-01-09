@@ -414,7 +414,7 @@ if "baselines_synced" not in st.session_state:
 # ===================================================================
 
 with st.sidebar:
-    st.title("🤖 Provar AI")
+    st.title("🤖 Provar Report Analyzer Ai")
     st.caption(f"v{APP_VERSION}")
     
     st.markdown("---")
@@ -513,8 +513,8 @@ current_page = st.session_state.current_page
 # Page Headers
 page_headers = {
     'dashboard': ('📊 Dashboard', 'Overview and quick stats'),
-    'provar': ('🔍 Provar Reports', 'Analyze Provar XML reports'),
-    'automation_api': ('🔧 AutomationAPI Reports', 'Analyze AutomationAPI XML reports'),
+    'provar': ('🔍 Provar Application Reports', 'Analyze Provar XML reports'),
+    'automation_api': ('🔧 Test Builder Reports', 'Analyze AutomationAPI XML reports'),
     'baselines': ('📈 Baseline Tracker', 'Manage and track baselines'),
     'settings': ('⚙️ Settings', 'Configure application settings')
 }
@@ -666,9 +666,9 @@ elif current_page == 'baselines':
         with st.container():
             st.markdown("### 🚀 Welcome to Baseline Tracker!")
             st.info("""
-            **Your baseline cache is empty.** This means data will be loaded from GitHub every time (slower).
+            **Your baseline is empty.** This means data will be loaded from GitHub.
             
-            **Click below to sync once and enable fast mode:**
+            **Click below to sync data from GitHub :**
             """)
             
             col1, col2, col3 = st.columns([1, 2, 1])
